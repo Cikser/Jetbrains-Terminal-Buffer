@@ -32,7 +32,7 @@ public class Line {
 
     @Override
     public String toString() {
-        return Arrays.toString(characters);
+        return new String(characters);
     }
 
 }

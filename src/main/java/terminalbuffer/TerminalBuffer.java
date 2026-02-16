@@ -9,7 +9,7 @@ public class TerminalBuffer {
     private int maxScrollback;
     private int currentAttributes;
     private final BoundedQueue<Line> scrollback;
-    private final ArrayList<Line> screen;
+    private final BoundedQueue<Line> screen;
     private final Cursor cursor;
 
     public TerminalBuffer(int width, int height, int maxScrollback){
@@ -17,14 +17,14 @@ public class TerminalBuffer {
         this.height = height;
         this.maxScrollback = maxScrollback;
 
-        screen = new ArrayList<>();
+        screen = new BoundedQueue<>(height);
         scrollback = new BoundedQueue<>(maxScrollback);
 
         currentAttributes = Style.setAttributes(Style.Color.WHITE, Style.Color.BLACK, Style.NONE);
         cursor = new Cursor(this);
 
         for (int i = 0; i < height; i++){
-            screen.add(new Line(this));
+            screen.push(new Line(this));
         }
     }
 
@@ -65,13 +65,13 @@ public class TerminalBuffer {
     }
 
     void scroll(){
-        Line removed = screen.removeFirst();
+        Line removed = screen.pop();
         moveToScrollBack(removed);
         addEmptyLine();
     }
 
     public void addEmptyLine(){
-        screen.addLast(new Line(this));
+        screen.push(new Line(this));
     }
 
     public void fillLine(int i, char character){
@@ -101,8 +101,8 @@ public class TerminalBuffer {
 
     String screenToString(){
         StringBuilder sb = new StringBuilder();
-        for(Line line : screen){
-            sb.append(line.toString());
+        for(int i = 0; i < screen.size(); i++){
+            sb.append(screen.get(i).toString());
         }
         return sb.toString();
     }

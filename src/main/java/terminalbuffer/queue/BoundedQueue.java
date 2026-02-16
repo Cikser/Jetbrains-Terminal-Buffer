@@ -3,13 +3,13 @@ package terminalbuffer.queue;
 import java.util.ArrayList;
 
 public class BoundedQueue<E> {
-    private final ArrayList<E> list;
-    private final int capacity;
+    private Object[] list;
+    private int capacity;
     private int count;
     private int head, tail;
 
     public BoundedQueue(int capacity){
-        list = new ArrayList<>(capacity);
+        list = new Object[capacity];
         this.capacity = capacity;
         count = 0;
         head = 0;
@@ -21,17 +21,18 @@ public class BoundedQueue<E> {
     }
 
     public E get(int i) {
-        if (i >= size()) {
+        if (i >= size() || i < 0) {
             throw new IndexOutOfBoundsException();
         }
-        return list.get((head + i) % capacity);
+        return (E)list[(head + i) % capacity];
     }
 
     public E pop(){
         if(size() == 0){
             throw new IndexOutOfBoundsException();
         }
-        E ret = list.get(head);
+        E ret = (E)list[head];
+        list[head] = null;
         head = (head + 1) % capacity;
         count--;
         return ret;
@@ -41,12 +42,7 @@ public class BoundedQueue<E> {
         if(size() == capacity){
             throw new IndexOutOfBoundsException();
         }
-        if(list.size() < capacity){
-            list.add(elem);
-        }
-        else{
-            list.set(tail, elem);
-        }
+        list[tail] = elem;
         tail = (tail + 1) % capacity;
         count++;
     }
@@ -56,9 +52,26 @@ public class BoundedQueue<E> {
     }
 
     public void clear(){
-        list.clear();
+        for (int i = 0; i < capacity; i++){
+            list[i] = null;
+        }
         count = 0;
         head = 0;
         tail = 0;
+    }
+
+    public void resize(int newCapacity){
+        Object[] newElements = new Object[newCapacity];
+        int elementsToCopy = Math.min(count, newCapacity);
+
+        for (int i = 0, j = head; i < elementsToCopy; i++, j = (j + 1) % capacity) {
+            newElements[i] = list[j];
+        }
+
+        list = newElements;
+        capacity = newCapacity;
+        count = elementsToCopy;
+        head = 0;
+        tail = (elementsToCopy == newCapacity) ? 0 : elementsToCopy;
     }
 }

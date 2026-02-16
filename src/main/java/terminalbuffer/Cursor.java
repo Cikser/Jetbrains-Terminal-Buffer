@@ -10,32 +10,32 @@ public class Cursor {
         col = 0;
     }
 
-    void set(int row, int col){
+    public void set(int row, int col){
         this.row = Math.max(0, Math.min(owner.height() - 1, row));
         this.col = Math.max(0, Math.min(owner.width() - 1, col));
     }
 
-    int row(){
+    public int row(){
         return row;
     }
 
-    int col(){
+    public int col(){
         return col;
     }
 
-    void up(int n){
+    public void up(int n){
         set(row - n, col);
     }
 
-    void down(int n){
+    public void down(int n){
         set(row + n, col);
     }
 
-    void left(int n){
+    public void left(int n){
         set(row, col - n);
     }
 
-    void right(int n){
+    public void right(int n){
         set(row, col + n);
     }
 

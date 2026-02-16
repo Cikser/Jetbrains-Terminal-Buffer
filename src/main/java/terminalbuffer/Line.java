@@ -3,11 +3,9 @@ package terminalbuffer;
 import java.util.ArrayList;
 
 public class Line {
-    private final TerminalBuffer owner;
     private final ArrayList<Cell> list;
 
     Line(TerminalBuffer owner){
-        this.owner = owner;
         list = new ArrayList<>();
 
         for(int i = 0; i < owner.width(); i++){

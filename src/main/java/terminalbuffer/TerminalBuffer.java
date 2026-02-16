@@ -8,9 +8,9 @@ public class TerminalBuffer {
     private int width, height;
     private int maxScrollback;
     private int currentAttributes;
-    private BoundedQueue<Line> scrollback;
-    private ArrayList<Line> screen;
-    private Cursor cursor;
+    private final BoundedQueue<Line> scrollback;
+    private final ArrayList<Line> screen;
+    private final Cursor cursor;
 
     public TerminalBuffer(int width, int height, int maxScrollback){
         this.width = width;
@@ -41,7 +41,11 @@ public class TerminalBuffer {
     }
 
     public void setAttributes(int fg, int bg, int attributes){
-        Style.setAttributes(fg, bg, attributes);
+        currentAttributes = Style.setAttributes(fg, bg, attributes);
+    }
+
+    public Cursor cursor(){
+        return cursor;
     }
 
     public void write(String text){

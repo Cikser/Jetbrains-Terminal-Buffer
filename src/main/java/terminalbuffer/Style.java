@@ -43,7 +43,7 @@ public class Style {
     }
 
     public static int setAttribute(int attributes, int style){
-        return (attributes & (0xFF)) | style;
+        return (attributes & ~(0xFF)) | style;
     }
 
     public static int addAttribute(int attributes, int style){

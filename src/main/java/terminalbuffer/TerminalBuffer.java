@@ -49,9 +49,8 @@ public class TerminalBuffer {
     }
 
     public void write(String text){
-        for(Character c : text.toCharArray()){
-            Cell cell = new Cell(c, currentAttributes);
-            screen.get(cursor.row()).set(cursor.col(), cell);
+        for(char c : text.toCharArray()){
+            screen.get(cursor.row()).set(cursor.col(), c, currentAttributes);
             cursor.advance();
         }
     }
@@ -75,11 +74,11 @@ public class TerminalBuffer {
         screen.addLast(new Line(this));
     }
 
-    public void fillLine(int i, Character character){
+    public void fillLine(int i, char character){
         Line line = screen.get(i);
         for(int k = 0; k < width; k++){
-            Cell cell = line.get(k);
-            line.set(k, new Cell(character, cell.attributes()));
+            int attributes = line.getAttributes(k);
+            line.set(k, character, attributes);
         }
     }
 
@@ -118,19 +117,19 @@ public class TerminalBuffer {
     }
 
     Character charAtScreen(int row, int col){
-        return screen.get(row).get(col).character();
+        return screen.get(row).getChar(col);
     }
 
     int attributesAtScreen(int row, int col){
-        return screen.get(row).get(col).attributes();
+        return screen.get(row).getAttributes(col);
     }
 
     Character charAtScrollBack(int row, int col){
-        return scrollback.get(row).get(col).character();
+        return scrollback.get(row).getChar(col);
     }
 
     int attributesAtScrollback(int row, int col){
-        return scrollback.get(row).get(col).attributes();
+        return scrollback.get(row).getAttributes(col);
     }
 
 }

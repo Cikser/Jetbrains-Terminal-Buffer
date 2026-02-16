@@ -1,32 +1,38 @@
 package terminalbuffer;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 
 public class Line {
-    private final ArrayList<Cell> list;
+    private final char[] characters;
+    private final int[] attributes;
 
     Line(TerminalBuffer owner){
-        list = new ArrayList<>();
+        characters = new char[owner.width()];
+        attributes = new int[owner.width()];
 
         for(int i = 0; i < owner.width(); i++){
-            list.add(Cell.create(owner));
+            characters[i] = ' ';
+            attributes[i] = owner.currentAttributes();
         }
     }
 
-    Cell get(int i){
-        return list.get(i);
+    char getChar(int i){
+        return characters[i];
     }
 
-    void set(int i, Cell cell){
-        list.set(i, cell);
+    int getAttributes(int i){
+        return attributes[i];
+    }
+
+    void set(int i, char character, int attributes){
+        this.characters[i] = character;
+        this.attributes[i] = attributes;
     }
 
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder();
-        for(Cell c : list){
-            sb.append(c.character());
-        }
-        return sb.toString();
+        return Arrays.toString(characters);
     }
+
 }

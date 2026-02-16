@@ -52,26 +52,26 @@ public class TerminalBuffer {
         for(Character c : text.toCharArray()){
             Cell cell = new Cell(c, currentAttributes);
             screen.get(cursor.row()).set(cursor.col(), cell);
-            if(cursor.col() == width - 1)
-                newLine();
             cursor.advance();
         }
     }
 
     private void moveToScrollBack(Line line){
-        if(maxScrollback != 0){
-            if(!scrollback.empty()){
-                scrollback.pop();
-            }
-            scrollback.push(line);
+        if(maxScrollback == 0) return;
+
+        if(scrollback.size() == maxScrollback){
+            scrollback.pop();
         }
+        scrollback.push(line);
     }
 
-    public void newLine(){
-        if(cursor.row() < height - 1)
-            return;
+    void scroll(){
         Line removed = screen.removeFirst();
         moveToScrollBack(removed);
+        addEmptyLine();
+    }
+
+    public void addEmptyLine(){
         screen.addLast(new Line(this));
     }
 
@@ -84,14 +84,15 @@ public class TerminalBuffer {
     }
 
     public void clearScreen(){
-        for(Line line : screen){
-            moveToScrollBack(line);
-        }
         screen.clear();
+        for(int i = 0; i < height; i++){
+            addEmptyLine();
+        }
+        cursor.set(0, 0);
     }
 
     public void clearScreenAndScrollback(){
-        screen.clear();
+        clearScreen();
         scrollback.clear();
     }
 

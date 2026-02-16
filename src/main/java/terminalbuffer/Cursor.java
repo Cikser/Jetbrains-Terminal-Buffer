@@ -47,8 +47,13 @@ public class Cursor {
             down(1);
         }
         else{
+            owner.scroll();
             set(row, 0);
         }
+    }
+    
+    boolean atEnd(){
+        return row == owner.height() - 1 && col == owner.width() - 1;
     }
 
 }

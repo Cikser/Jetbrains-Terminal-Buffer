@@ -42,12 +42,12 @@ public class Style {
         return (attributes & ~(0xF << 4)) | bg;
     }
 
-    public static int setAttribute(int attributes, int style){
-        return (attributes & ~(0xFF)) | style;
-    }
-
     public static int addAttribute(int attributes, int style){
         return attributes | style;
+    }
+
+    public static int clearAttributes(int attributes){
+        return attributes & ~(0xFF);
     }
 
 }

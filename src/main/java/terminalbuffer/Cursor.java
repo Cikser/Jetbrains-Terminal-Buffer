@@ -51,9 +51,24 @@ public class Cursor {
             set(row, 0);
         }
     }
-    
-    boolean atEnd(){
-        return row == owner.height() - 1 && col == owner.width() - 1;
+
+    void advanceDown() {
+        if(row == owner.height() - 1)
+            owner.scroll();
+        down(1);
     }
 
+    void handleChar(char c){
+        switch (c){
+            case '\n':{
+                advanceDown();
+                break;
+            }
+            case '\r':{
+                left(owner.width());
+                break;
+            }
+            default: break;
+        }
+    }
 }

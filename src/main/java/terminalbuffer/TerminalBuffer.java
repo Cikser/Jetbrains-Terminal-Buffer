@@ -58,9 +58,12 @@ public class TerminalBuffer {
         }
     }
 
-    private void print(){
-        for(Line line : screen){
-            System.out.println(line.toString());
+    private void moveToScrollBack(Line line){
+        if(maxScrollback != 0){
+            if(!scrollback.empty()){
+                scrollback.pop();
+            }
+            scrollback.push(line);
         }
     }
 
@@ -68,13 +71,65 @@ public class TerminalBuffer {
         if(cursor.row() < height - 1)
             return;
         Line removed = screen.removeFirst();
-        if(maxScrollback != 0){
-            if(scrollback.size() != 0){
-                scrollback.pop();
-            }
-            scrollback.push(removed);
-        }
+        moveToScrollBack(removed);
         screen.addLast(new Line(this));
+    }
+
+    public void fillLine(int i, Character character){
+        Line line = screen.get(i);
+        for(int k = 0; k < width; k++){
+            Cell cell = line.get(k);
+            line.set(k, new Cell(character, cell.attributes()));
+        }
+    }
+
+    public void clearScreen(){
+        for(Line line : screen){
+            moveToScrollBack(line);
+        }
+        screen.clear();
+    }
+
+    public void clearScreenAndScrollback(){
+        screen.clear();
+        scrollback.clear();
+    }
+
+    String lineToString(int i){
+        return screen.get(i).toString();
+    }
+
+    String screenToString(){
+        StringBuilder sb = new StringBuilder();
+        for(Line line : screen){
+            sb.append(line.toString());
+        }
+        return sb.toString();
+    }
+
+    String screenAndScrollbackToString(){
+        StringBuilder sb = new StringBuilder();
+        for(int i = 0; i < scrollback.size(); i++){
+            sb.append(scrollback.get(i).toString());
+        }
+        sb.append(screenToString());
+        return sb.toString();
+    }
+
+    Character charAtScreen(int row, int col){
+        return screen.get(row).get(col).character();
+    }
+
+    int attributesAtScreen(int row, int col){
+        return screen.get(row).get(col).attributes();
+    }
+
+    Character charAtScrollBack(int row, int col){
+        return scrollback.get(row).get(col).character();
+    }
+
+    int attributesAtScrollback(int row, int col){
+        return scrollback.get(row).get(col).attributes();
     }
 
 }

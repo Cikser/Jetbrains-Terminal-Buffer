@@ -50,4 +50,15 @@ public class BoundedQueue<E> {
         tail = (tail + 1) % capacity;
         count++;
     }
+
+    public boolean empty(){
+        return size() == 0;
+    }
+
+    public void clear(){
+        list.clear();
+        count = 0;
+        head = 0;
+        tail = 0;
+    }
 }

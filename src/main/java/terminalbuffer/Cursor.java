@@ -62,6 +62,7 @@ public class Cursor {
         switch (c){
             case '\n':{
                 advanceDown();
+                left(owner.width());
                 break;
             }
             case '\r':{

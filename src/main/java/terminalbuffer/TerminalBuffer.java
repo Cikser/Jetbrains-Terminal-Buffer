@@ -53,13 +53,16 @@ public class TerminalBuffer {
 
     public void write(String text){
         for(char c : text.toCharArray()){
-            cursor.handleChar(c);
+            if(c == '\r' || c == '\n') {
+                cursor.handleChar(c);
+                continue;
+            }
             screen.get(cursor.row()).set(cursor.col(), c, currentAttributes);
             cursor.advance();
         }
     }
 
-    public void write(int row, int col, String text){
+    public void write(String text, int row, int col){
         cursor.set(row, col);
         write(text);
     }
@@ -76,11 +79,11 @@ public class TerminalBuffer {
     void scroll(){
         Line removed = screen.pop();
         moveToScrollBack(removed);
-        addEmptyLine();
+        screen.push(new Line(this));
     }
 
     public void addEmptyLine(){
-        screen.push(new Line(this));
+        scroll();
     }
 
     public void fillLine(int i, char character){
@@ -90,7 +93,7 @@ public class TerminalBuffer {
     public void clearScreen(){
         screen.clear();
         for(int i = 0; i < height; i++){
-            addEmptyLine();
+            screen.push(new Line(this));
         }
         cursor.set(0, 0);
     }
@@ -139,19 +142,6 @@ public class TerminalBuffer {
         return scrollback.get(row).getAttributes(col);
     }
 
-    /*public void insert(String text, int[] attributes){
-        LineContent lc = screen.get(cursor.row()).insertAndOverflow(cursor.col(), text, attributes, 0, text.length());
-        cursor.right(text.length() - 1);
-        cursor.advance();
-        if(lc == null)
-            return;
-        if(cursor.col() != 0){
-            cursor.right(width);
-            cursor.advance();
-        }
-        insert(new String(lc.characters), lc.attributes);
-    }*/
-
     private final Deque<LineContent> insertQueue = new ArrayDeque<>();
 
     private void insertAndOverflow(String text, int[] attributes){
@@ -169,15 +159,20 @@ public class TerminalBuffer {
 
             Line line = screen.get(cursor.row());
             LineContent lc = line.insertAndOverflow(cursor.col(), text, attributes, lastControl + 1, controlChar);
-            int substringLen = controlChar - lastControl - 1;
-            if(lc != null)
-                substringLen += lc.characters.length;
-            int shift = Math.min(width, substringLen - 1);
+            int shift = calcCursorShift(lc, lastControl + 1, controlChar);
             cursor.right(shift);
             cursor.advance();
             if(lc != null) insertQueue.push(lc);
             i = controlChar + 1;
         }
+    }
+
+    private int calcCursorShift(LineContent lc, int textStartIndex, int textEndIndex){
+        int substringLen = textEndIndex - textStartIndex;
+        if(lc != null)
+            substringLen = width;
+        int shift = Math.min(width, substringLen - 1);
+        return shift;
     }
 
     private int findControl(int lastControl, String text){
@@ -188,7 +183,9 @@ public class TerminalBuffer {
         return text.length();
     }
 
-    public void insert(String text, int[] attributes){
+    public void insert(String text){
+        int[] attributes = new int[text.length()];
+        Arrays.fill(attributes, currentAttributes);
         insertAndOverflow(text, attributes);
         while (!insertQueue.isEmpty()){
             LineContent lc = insertQueue.pop();
@@ -200,9 +197,9 @@ public class TerminalBuffer {
         }
     }
 
-    public void insert(int row, int col, String text, int[] attributes){
+    public void insert(String text, int row, int col){
         cursor.set(row, col);
-        insert(text, attributes);
+        insert(text);
     }
 
     void print(){
@@ -211,16 +208,5 @@ public class TerminalBuffer {
         }
     }
 
-    public static void main(String [] args){
-        TerminalBuffer buffer = new TerminalBuffer(3, 5, 100);
-        String insert = "ff";
-        int[] attr = new int[insert.length()];
-        Arrays.fill(attr, buffer.currentAttributes);
-        buffer.write("abc");
-        buffer.cursor.set(2, 0);
-        buffer.write("cba");
-        buffer.insert(0, 0, insert, attr);
-        buffer.print();
-    }
 
 }

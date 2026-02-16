@@ -1,6 +1,5 @@
 package terminalbuffer;
 
-import java.lang.reflect.Array;
 import java.util.Arrays;
 
 class LineContent{
@@ -54,7 +53,8 @@ public class Line {
     LineContent insertAndOverflow(int index, String text, int[] attr, int textStartIndex, int textEndIndex){
         int capacity = characters.length;
         int textLen = textEndIndex - textStartIndex;
-        int textOverflowSize = textLen > capacity ? textLen - (capacity - index) : 0;
+        int textOverflowSize = (index + textLen) > capacity ? textLen - (capacity - index) : 0;
+        int textOverflowStart = textStartIndex + textLen - textOverflowSize;
 
         int lineStartIndex = index;
         int lineEndIndex = empty() ? index : capacity;
@@ -67,7 +67,6 @@ public class Line {
         }
 
         int overflowSize = textOverflowSize + lineOverflowSize;
-        int textOverflowStart = textStartIndex + textLen - textOverflowSize;
 
         LineContent lc = createLineContent(overflowSize, text, attr, lineStartIndex, lineOverflowSize, textOverflowStart, textOverflowSize);
         copyFromTextAndMove(elementsToCopy, text, attr, index, textLen, textOverflowStart);
@@ -81,10 +80,10 @@ public class Line {
         lc.characters = new char[overflowSize];
         lc.attributes = new int[overflowSize];
 
-        System.arraycopy(characters, lineStartIndex, lc.characters, 0, lineOverflowSize);
-        System.arraycopy(attributes, lineStartIndex, lc.attributes, 0, lineOverflowSize);
-        System.arraycopy(text.toCharArray(), textOverflowStart, lc.characters, lineOverflowSize, textOverflowSize);
-        System.arraycopy(attr, textOverflowStart, lc.attributes, lineOverflowSize, textOverflowSize);
+        System.arraycopy(text.toCharArray(), textOverflowStart, lc.characters, 0, textOverflowSize);
+        System.arraycopy(attr, textOverflowStart, lc.attributes, 0, textOverflowSize);
+        System.arraycopy(characters, lineStartIndex, lc.characters, textOverflowSize, lineOverflowSize);
+        System.arraycopy(attributes, lineStartIndex, lc.attributes, textOverflowSize, lineOverflowSize);
         return lc;
     }
 
@@ -98,8 +97,8 @@ public class Line {
     }
 
     boolean empty(){
-        for (int i = 0; i < empty.length; i++){
-            if(!empty[i]) return false;
+        for (boolean isEmpty : empty) {
+            if (!isEmpty) return false;
         }
         return true;
     }

@@ -6,7 +6,7 @@ import java.util.*;
 
 public class TerminalBuffer {
     private int width, height;
-    private int maxScrollback;
+    private final int maxScrollback;
     private int currentAttributes;
     private final BoundedQueue<Line> scrollback;
     private final BoundedQueue<Line> screen;
@@ -74,7 +74,7 @@ public class TerminalBuffer {
 
             if (wide) {
                 screen.get(cursor.row()).setWide(cursor.col(), c, currentAttributes);
-                cursor.advanceWide();
+                cursor.advanceForWideChar();
             } else {
                 screen.get(cursor.row()).set(cursor.col(), c, currentAttributes);
                 cursor.advance();
@@ -107,7 +107,7 @@ public class TerminalBuffer {
     }
 
     public void fillLine(int i, char character){
-        screen.get(i).fill(character);
+        screen.get(i).fill(character, currentAttributes);
     }
 
     public void clearScreen(){
@@ -121,10 +121,6 @@ public class TerminalBuffer {
     public void clearScreenAndScrollback(){
         clearScreen();
         scrollback.clear();
-    }
-
-    public String lineToString(int i){
-        return screen.get(i).toString();
     }
 
     public String screenToString(){
@@ -146,26 +142,11 @@ public class TerminalBuffer {
         return sb.toString();
     }
 
-    public char charAtScreen(int row, int col){
-        return screen.get(row).getChar(col);
-    }
-
-    public int attributesAtScreen(int row, int col){
-        return screen.get(row).getAttributes(col);
-    }
-
-    public char charAtScrollBack(int row, int col){
-        return scrollback.get(row).getChar(col);
-    }
-
-    public int attributesAtScrollback(int row, int col){
-        return scrollback.get(row).getAttributes(col);
-    }
-
     private void insertAndOverflow(String text, int[] attributes, boolean[] empty, Deque<LineContent> insertQueue){
         cursor.resolveWrap();
         int i = 0;
         int lastControl = -1;
+        char[] chars = new char[text.length()];
         while (i < text.length()){
             int controlChar = findControl(lastControl, text);
 
@@ -221,7 +202,10 @@ public class TerminalBuffer {
         }
 
         String expanded = expandedText.toString();
-        int[] attributes = expandedAttrs.stream().mapToInt(x -> x).toArray();
+        int[] attributes = new int[expandedAttrs.size()];
+        for (int i = 0; i < expandedAttrs.size(); i++) {
+            attributes[i] = expandedAttrs.get(i);
+        }
         boolean[] empty = new boolean[expandedEmpty.size()];
         for (int i = 0; i < expandedEmpty.size(); i++) empty[i] = expandedEmpty.get(i);
 
@@ -249,7 +233,7 @@ public class TerminalBuffer {
                     newCursor.advance();
                     newCursor.resolveWrap();
                 }
-                newCursor.advanceWide();
+                newCursor.advanceForWideChar();
             } else {
                 newCursor.advance();
             }
@@ -261,18 +245,6 @@ public class TerminalBuffer {
     public void insert(String text, int row, int col){
         cursor.set(row, col);
         insert(text);
-    }
-
-    private int[] buildAttr(int length){
-        int[] attr = new int[length];
-        Arrays.fill(attr, currentAttributes);
-        return attr;
-    }
-
-    private boolean[] buildEmpty(int length){
-        boolean[] empty = new boolean[length];
-        Arrays.fill(empty, false);
-        return empty;
     }
 
     public char getChar(int i, int j){
@@ -301,6 +273,105 @@ public class TerminalBuffer {
     }
 
     public void resize(int newWidth, int newHeight) {
+        List<Line> allLines = collectLinesForReflow();
+        CursorAnchor anchor = calculateCursorAnchor(allLines);
+
+        // Optimizacija: Radimo reflow bez međulista StyledChar objekata
+        ReflowResult result = performFastReflow(allLines, newWidth, anchor);
+
+        this.width = newWidth;
+        this.height = newHeight;
+        rebuildBuffers(result.newLines, newHeight);
+
+        restoreCursorPosition(result.newCursorRow, result.newCursorCol, result.newLines.size());
+    }
+
+    // Rekordi ostaju za čitljivost (kreiraju se samo jednom po resize-u, to je zanemarljivo)
+    private record CursorAnchor(int blockIndex, int offset) {}
+    private record ReflowResult(List<Line> newLines, int newCursorRow, int newCursorCol) {}
+
+    /**
+     * Glavna optimizacija: Prolazimo kroz linije i identifikujemo "paragrafe" (logičke blokove).
+     * Umesto kopiranja u liste, direktno čitamo iz starih Line objekata u nove.
+     */
+    private ReflowResult performFastReflow(List<Line> allLines, int newWidth, CursorAnchor anchor) {
+        List<Line> newLines = new ArrayList<>(allLines.size()); // Pre-allocate
+        int resRow = -1, resCol = -1;
+        int currentBlockIdx = 0;
+
+        int i = 0;
+        while (i < allLines.size()) {
+            // 1. Identifikuj opseg paragrafa (od i do end)
+            int start = i;
+            int end = i;
+            while (end + 1 < allLines.size() && allLines.get(end + 1).isWrapped()) {
+                end++;
+            }
+
+            // 2. Izračunaj efektivnu dužinu paragrafa (bez trailing spaces)
+            int effectiveLen = calculateEffectiveLength(allLines, start, end);
+
+            // 3. Odredi koliko nam novih linija treba za ovaj pasus
+            // Uključujemo i kursor ako je on unutar ovog bloka
+            int logicSize = (currentBlockIdx == anchor.blockIndex)
+                    ? Math.max(effectiveLen, anchor.offset + 1)
+                    : effectiveLen;
+
+            // 4. "Iseci" pasus u nove linije direktnim kopiranjem
+            for (int offset = 0; offset < logicSize || (logicSize == 0 && offset == 0); offset += newWidth) {
+                Line newLine = new Line(newWidth, currentAttributes);
+                if (offset > 0) newLine.setWrapped(true);
+
+                if (currentBlockIdx == anchor.blockIndex && anchor.offset >= offset && anchor.offset < offset + newWidth) {
+                    resRow = newLines.size();
+                    resCol = anchor.offset - offset;
+                }
+
+                copyFromOriginal(allLines, start, end, newLine, offset, newWidth);
+                newLines.add(newLine);
+            }
+
+            currentBlockIdx++;
+            i = end + 1; // Pređi na sledeći pasus
+        }
+        return new ReflowResult(newLines, resRow, resCol);
+    }
+
+    /**
+     * Pronalazi poslednji ne-prazan karakter u celom logičkom bloku.
+     * O(N) po pasusu, ali bez alokacije memorije.
+     */
+    private int calculateEffectiveLength(List<Line> lines, int start, int end) {
+        for (int l = end; l >= start; l--) {
+            Line line = lines.get(l);
+            for (int c = this.width - 1; c >= 0; c--) {
+                if (line.getChar(c) != ' ' || line.getAttributes(c) != currentAttributes) {
+                    return (l - start) * this.width + (c + 1);
+                }
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * Direktno kopiranje iz više starih linija u jednu novu liniju.
+     */
+    private void copyFromOriginal(List<Line> allLines, int start, int end, Line target, int startOffset, int targetWidth) {
+        for (int j = 0; j < targetWidth; j++) {
+            int globalOffset = startOffset + j;
+            int lineInBlock = globalOffset / this.width;
+            int colInLine = globalOffset % this.width;
+
+            if (start + lineInBlock <= end) {
+                Line source = allLines.get(start + lineInBlock);
+                target.set(j, source.getChar(colInLine), source.getAttributes(colInLine));
+            } else {
+                break; // Kraj pasusa
+            }
+        }
+    }
+    /*
+    public void resize(int newWidth, int newHeight) {
         // 1. Priprema i sakupljanje podataka
         List<Line> allLines = collectLinesForReflow();
 
@@ -326,18 +397,18 @@ public class TerminalBuffer {
     private record StyledChar(char c, int attr, boolean empty) {}
     private record CursorAnchor(int blockIndex, int offset) {}
     private record ReflowResult(List<Line> newLines, int newCursorRow, int newCursorCol) {}
-
+*/
     private List<Line> collectLinesForReflow() {
-        List<Line> all = new ArrayList<>(scrollback.size() + getScreenTrimIndex());
+        List<Line> all = new ArrayList<>(scrollback.size() + findLastNonEmptyScreenLine());
         for (int i = 0; i < scrollback.size(); i++) all.add(scrollback.get(i));
-        for (int i = 0; i < getScreenTrimIndex(); i++) {
+        for (int i = 0; i < findLastNonEmptyScreenLine(); i++) {
             Line line = screen.get(i);
             all.add(line);
         }
         return all;
     }
 
-    private int getScreenTrimIndex(){
+    private int findLastNonEmptyScreenLine(){
         for (int i = screen.size() - 1; i >= 0; i--){
             if(screen.get(i).empty() && i != cursor.row())
                 continue;
@@ -345,7 +416,7 @@ public class TerminalBuffer {
         }
         return 0;
     }
-
+/*
     private List<List<StyledChar>> groupIntoLogicalBlocks(List<Line> lines) {
         List<List<StyledChar>> blocks = new ArrayList<>();
         List<StyledChar> currentBlock = new ArrayList<>();
@@ -406,7 +477,7 @@ public class TerminalBuffer {
                 break;
             }
         }
-    }
+    }*/
 
     private CursorAnchor calculateCursorAnchor(List<Line> lines) {
         int blockIdx = 0;
@@ -436,7 +507,7 @@ public class TerminalBuffer {
             cursor.set(Math.max(0, screen.size() - 1), 0);
         }
     }
-
+/*
     private void trimTrailingSpaces(List<StyledChar> block) {
         int lastNonSpace = -1;
         for (int i = 0; i < block.size(); i++) {
@@ -446,7 +517,7 @@ public class TerminalBuffer {
         if (lastNonSpace < block.size() - 1) {
             block.subList(lastNonSpace + 1, block.size()).clear();
         }
-    }
+    }*/
 
     private void rebuildBuffers(List<Line> newLines, int newHeight) {
         scrollback.clear();
@@ -468,20 +539,6 @@ public class TerminalBuffer {
         while (screen.size() < newHeight) {
             screen.push(new Line(width, currentAttributes));
         }
-    }
-
-    public static void main(String []args){
-        int WIDTH = 10, HEIGHT = 5;
-        TerminalBuffer buffer = new TerminalBuffer(WIDTH, HEIGHT, 100);
-        buffer.write("HELLO", 2, 3);
-        buffer.cursor().set(2, 3);
-        System.out.println(buffer.screenToString());
-        buffer.resize(WIDTH + 5, HEIGHT + 2);
-        System.out.println(buffer.screenAndScrollbackToString());
-        System.out.println(buffer.cursor.row() + " " + buffer.cursor.col());
-
-        buffer.insert("WORLD");
-        System.out.println(buffer.screenToString());
     }
 
 }

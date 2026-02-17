@@ -11,9 +11,9 @@ class LineContent{
 }
 
 public class Line {
-    private char[] characters;
-    private int[] attributes;
-    private boolean[] empty;
+    private final char[] characters;
+    private final int[] attributes;
+    private final boolean[] empty;
 
     private boolean isWrapped; // TRUE ako je ovo Soft Wrap (nastavak prethodne linije)
 
@@ -53,19 +53,14 @@ public class Line {
         this.empty[i] = false;
     }
 
-    void set(int i, char character, int attributes, boolean empty){
-        this.characters[i] = character;
-        this.attributes[i] = attributes;
-        this.empty[i] = empty;
-    }
-
     @Override
     public String toString() {
         return new String(characters);
     }
 
-    void fill(char character){
+    void fill(char character, int attr){
         Arrays.fill(characters, character);
+        Arrays.fill(attributes, attr);
         if(character != ' '){
             Arrays.fill(empty, false);
         }
@@ -73,6 +68,7 @@ public class Line {
 
     LineContent insertAndOverflow(int index, String text, int[] attr, boolean[] empty, int textStartIndex, int textEndIndex){
         int capacity = characters.length;
+        char[] textChars = text.toCharArray();
         int textLen = textEndIndex - textStartIndex;
         int textOverflowSize = (index + textLen) > capacity ? textLen - (capacity - index) : 0;
         int textOverflowStart = textStartIndex + textLen - textOverflowSize;
@@ -89,20 +85,20 @@ public class Line {
 
         int overflowSize = textOverflowSize + lineOverflowSize;
 
-        LineContent lc = createLineContent(overflowSize, text, attr, empty, lineStartIndex, lineOverflowSize, textOverflowStart, textOverflowSize);
-        copyFromTextAndMove(elementsToCopy, text, attr, empty, index, textStartIndex, textLen, textOverflowStart);
+        LineContent lc = createLineContent(overflowSize, textChars, attr, empty, lineStartIndex, lineOverflowSize, textOverflowStart, textOverflowSize);
+        shiftExistingContentAndInsertText(elementsToCopy, textChars, attr, empty, index, textStartIndex, textLen, textOverflowStart);
 
         return lc;
     }
 
-    private LineContent createLineContent(int overflowSize, String text, int[] attr, boolean[] empty, int lineStartIndex, int lineOverflowSize, int textOverflowStart, int textOverflowSize){
+    private LineContent createLineContent(int overflowSize, char[] text, int[] attr, boolean[] empty, int lineStartIndex, int lineOverflowSize, int textOverflowStart, int textOverflowSize){
         if(overflowSize <= 0) return null;
         LineContent lc = new LineContent();
         lc.characters = new char[overflowSize];
         lc.attributes = new int[overflowSize];
         lc.empty = new boolean[overflowSize];
 
-        System.arraycopy(text.toCharArray(), textOverflowStart, lc.characters, 0, textOverflowSize);
+        System.arraycopy(text, textOverflowStart, lc.characters, 0, textOverflowSize);
         System.arraycopy(attr, textOverflowStart, lc.attributes, 0, textOverflowSize);
         System.arraycopy(empty, textOverflowStart, lc.empty, 0, textOverflowSize);
         System.arraycopy(characters, lineStartIndex, lc.characters, textOverflowSize, lineOverflowSize);
@@ -111,13 +107,13 @@ public class Line {
         return lc;
     }
 
-    void copyFromTextAndMove(int copiedSize, String text, int[] attr, boolean[] empty, int lineStartIndex, int textStartIndex, int textLen, int textOverflowStart){
+    void shiftExistingContentAndInsertText(int copiedSize, char[] text, int[] attr, boolean[] empty, int lineStartIndex, int textStartIndex, int textLen, int textOverflowStart){
         if(copiedSize > 0){
             System.arraycopy(characters, lineStartIndex, characters, lineStartIndex + textLen, copiedSize);
             System.arraycopy(attributes, lineStartIndex, attributes, lineStartIndex + textLen, copiedSize);
             System.arraycopy(this.empty, lineStartIndex, this.empty, lineStartIndex + textLen, copiedSize);
         }
-        System.arraycopy(text.toCharArray(), textStartIndex, characters, lineStartIndex, textOverflowStart - textStartIndex);
+        System.arraycopy(text, textStartIndex, characters, lineStartIndex, textOverflowStart - textStartIndex);
         System.arraycopy(attr, textStartIndex, attributes, lineStartIndex, textOverflowStart - textStartIndex);
         System.arraycopy(empty, textStartIndex, this.empty, lineStartIndex, textOverflowStart - textStartIndex);
     }
@@ -144,10 +140,6 @@ public class Line {
         this.characters[col + 1] = WIDE_PLACEHOLDER;
         this.attributes[col + 1] = attributes;
         this.empty[col + 1] = false;
-    }
-
-    boolean isPlaceholder(int col) {
-        return characters[col] == WIDE_PLACEHOLDER;
     }
 
 }

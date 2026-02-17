@@ -24,7 +24,9 @@ public class BoundedQueue<E> {
         if (i >= size() || i < 0) {
             throw new IndexOutOfBoundsException();
         }
-        return (E)list[(head + i) % capacity];
+        int index = head + i;
+        if (index >= capacity) index -= capacity;
+        return (E)list[index];
     }
 
     public E pop(){

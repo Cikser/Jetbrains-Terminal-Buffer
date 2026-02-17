@@ -2,7 +2,15 @@ package terminalbuffer;
 
 public class WideCharUtil {
 
+    public static boolean isWide(char c) {
+        // Fast path za ASCII (>90% tipičnog teksta)
+        if (c < 128) return false;
+        return isWide((int) c);
+    }
+
     public static boolean isWide(int codePoint) {
+        if (codePoint < 128) return false; // ASCII fast path
+
         Character.UnicodeBlock block = Character.UnicodeBlock.of(codePoint);
         return block == Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS
                 || block == Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS_EXTENSION_A
@@ -16,12 +24,8 @@ public class WideCharUtil {
     }
 
     private static boolean isEmoji(int codePoint) {
-        return (codePoint >= 0x1F300 && codePoint <= 0x1F9FF) // Misc symbols, emoticons
-                || (codePoint >= 0x2600 && codePoint <= 0x26FF)   // Misc symbols
-                || (codePoint >= 0x2700 && codePoint <= 0x27BF);  // Dingbats
-    }
-
-    public static boolean isWide(char c) {
-        return isWide((int) c);
+        return (codePoint >= 0x1F300 && codePoint <= 0x1F9FF)
+                || (codePoint >= 0x2600 && codePoint <= 0x26FF)
+                || (codePoint >= 0x2700 && codePoint <= 0x27BF);
     }
 }

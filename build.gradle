@@ -22,3 +22,8 @@ test {
         exceptionFormat "full"
     }
 }
+
+tasks.register('benchmark', JavaExec) {
+    mainClass = 'benchmark.PerformanceBenchmark'
+    classpath = sourceSets.test.runtimeClasspath
+}

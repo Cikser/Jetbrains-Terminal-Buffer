@@ -82,7 +82,7 @@ public class Cursor {
         }
     }
 
-    void advanceWide() {
+    void advanceForWideChar() {
         if (col + 2 < owner.width()) {
             right(2);
         } else {

@@ -49,23 +49,4 @@ public class Style {
         return attributes;
     }
 
-    public static int setForeground(int attributes, Color fg){
-        return (attributes & ~0xF) | fg.value;
-    }
-
-    public static int setBackground(int attributes, Color bg){
-        return (attributes & ~(0xF << 4)) | bg.value;
-    }
-
-    public static int addAttribute(int attributes, EnumSet<StyleFlag> style){
-        for(StyleFlag flag : style){
-            attributes |= flag.value << 8 ;
-        }
-        return attributes;
-    }
-
-    public static int clearStyle(int attributes){
-        return attributes & (0xFF);
-    }
-
 }

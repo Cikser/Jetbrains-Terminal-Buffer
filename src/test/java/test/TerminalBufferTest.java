@@ -42,7 +42,7 @@ class TerminalBufferTest {
         @DisplayName("Buffer starts with empty lines")
         void testEmptyInitialization() {
             for (int row = 0; row < HEIGHT; row++) {
-                String line = buffer.lineToString(row);
+                String line = buffer.getLine(row);
                 assertEquals(" ".repeat(WIDTH), line);
             }
         }
@@ -187,14 +187,14 @@ class TerminalBufferTest {
         @DisplayName("Write simple text")
         void testWriteSimpleText() {
             buffer.write("HELLO");
-            assertEquals("HELLO     ", buffer.lineToString(0));
+            assertEquals("HELLO     ", buffer.getLine(0));
         }
 
         @Test
         @DisplayName("Write at specific position")
         void testWriteAtPosition() {
             buffer.write("TEST", 2, 3);
-            String line = buffer.lineToString(2);
+            String line = buffer.getLine(2);
             assertEquals("   TEST   ", line);
         }
 
@@ -204,7 +204,7 @@ class TerminalBufferTest {
             buffer.write("AAAAAAAAAA"); // Fill line
             buffer.cursor().set(0, 0);
             buffer.write("BBB");
-            assertEquals("BBBAAAAAAA", buffer.lineToString(0));
+            assertEquals("BBBAAAAAAA", buffer.getLine(0));
         }
 
         @Test
@@ -222,8 +222,8 @@ class TerminalBufferTest {
             buffer.cursor().set(0, WIDTH - 2);
             buffer.write("ABCD");
 
-            String line0 = buffer.lineToString(0);
-            String line1 = buffer.lineToString(1);
+            String line0 = buffer.getLine(0);
+            String line1 = buffer.getLine(1);
 
             assertTrue(line0.endsWith("AB"));
             assertTrue(line1.startsWith("CD"));
@@ -242,7 +242,7 @@ class TerminalBufferTest {
             buffer.write("XX");
 
             // First line should be gone (in scrollback)
-            assertFalse(buffer.lineToString(0).contains("LINE0"));
+            assertFalse(buffer.getLine(0).contains("LINE0"));
         }
 
         @Test
@@ -251,7 +251,7 @@ class TerminalBufferTest {
             buffer.write("TEST");
             buffer.cursor().set(0, 0);
             buffer.write("");
-            assertEquals("TEST      ", buffer.lineToString(0));
+            assertEquals("TEST      ", buffer.getLine(0));
             assertEquals(0, buffer.cursor().col());
         }
 
@@ -259,7 +259,7 @@ class TerminalBufferTest {
         @DisplayName("Write single character")
         void testWriteSingleChar() {
             buffer.write("X");
-            assertEquals('X', buffer.charAtScreen(0, 0));
+            assertEquals('X', buffer.getChar(0, 0));
             assertEquals(1, buffer.cursor().col());
         }
     }
@@ -280,7 +280,7 @@ class TerminalBufferTest {
 
             buffer.insert("XYZ");
 
-            String result = buffer.lineToString(0).trim();
+            String result = buffer.getLine(0).trim();
             assertTrue(result.startsWith("HEXYZLLO") || result.startsWith("HEXYZ"));
         }
 
@@ -292,7 +292,7 @@ class TerminalBufferTest {
 
             buffer.insert("HELLO");
 
-            String line = buffer.lineToString(0);
+            String line = buffer.getLine(0);
             assertTrue(line.startsWith("HELLOW"));
         }
 
@@ -304,7 +304,7 @@ class TerminalBufferTest {
 
             buffer.insert("XX");
 
-            String line = buffer.lineToString(0);
+            String line = buffer.getLine(0);
             assertTrue(line.contains("TESTXX"));
         }
 
@@ -317,7 +317,7 @@ class TerminalBufferTest {
             buffer.insert("XXX");
 
             // Check second line has overflow
-            String line1 = buffer.lineToString(1);
+            String line1 = buffer.getLine(1);
             assertFalse(line1.trim().isEmpty());
         }
 
@@ -328,7 +328,7 @@ class TerminalBufferTest {
 
             buffer.insert("TEST");
 
-            String line = buffer.lineToString(2);
+            String line = buffer.getLine(2);
             assertTrue(line.contains("TEST"));
         }
 
@@ -349,7 +349,7 @@ class TerminalBufferTest {
 
             buffer.insert("XX", 0, 2);
 
-            String line = buffer.lineToString(0);
+            String line = buffer.getLine(0);
             assertTrue(line.contains("XX"));
         }
     }
@@ -413,8 +413,8 @@ class TerminalBufferTest {
         @DisplayName("Newline moves to next line, start of line")
         void testNewline() {
             buffer.write("A\nB");
-            assertEquals('A', buffer.charAtScreen(0, 0));
-            assertEquals('B', buffer.charAtScreen(1, 0));
+            assertEquals('A', buffer.getChar(0, 0));
+            assertEquals('B', buffer.getChar(1, 0));
         }
 
         @Test
@@ -422,24 +422,24 @@ class TerminalBufferTest {
         void testCarriageReturn() {
             buffer.write("HELLO\rX");
             // X should overwrite H
-            assertEquals('X', buffer.charAtScreen(0, 0));
+            assertEquals('X', buffer.getChar(0, 0));
         }
 
         @Test
         @DisplayName("Multiple newlines")
         void testMultipleNewlines() {
             buffer.write("A\n\n\nB");
-            assertEquals('A', buffer.charAtScreen(0, 0));
-            assertEquals('B', buffer.charAtScreen(3, 0));
+            assertEquals('A', buffer.getChar(0, 0));
+            assertEquals('B', buffer.getChar(3, 0));
         }
 
         @Test
         @DisplayName("Write with mixed content and newlines")
         void testMixedContentNewlines() {
             buffer.write("Line1\nLine2\nLine3");
-            assertTrue(buffer.lineToString(0).contains("Line1"));
-            assertTrue(buffer.lineToString(1).contains("Line2"));
-            assertTrue(buffer.lineToString(2).contains("Line3"));
+            assertTrue(buffer.getLine(0).contains("Line1"));
+            assertTrue(buffer.getLine(1).contains("Line2"));
+            assertTrue(buffer.getLine(2).contains("Line3"));
         }
 
         @Test
@@ -458,8 +458,8 @@ class TerminalBufferTest {
         @DisplayName("CR+LF (Windows line ending)")
         void testCRLF() {
             buffer.write("Line1\r\nLine2");
-            assertTrue(buffer.lineToString(0).contains("Line1"));
-            assertTrue(buffer.lineToString(1).contains("Line2"));
+            assertTrue(buffer.getLine(0).contains("Line1"));
+            assertTrue(buffer.getLine(1).contains("Line2"));
         }
     }
 
@@ -485,7 +485,7 @@ class TerminalBufferTest {
             buffer.setAttributes(Style.Color.RED, Style.Color.BLACK, Style.StyleFlag.BOLD);
             buffer.write("TEST");
 
-            int attrs = buffer.attributesAtScreen(0, 0);
+            int attrs = buffer.getAttributes(0, 0);
             assertNotEquals(0, attrs);
         }
 
@@ -498,8 +498,8 @@ class TerminalBufferTest {
             buffer.setAttributes(Style.Color.BLUE, Style.Color.BLACK, Style.StyleFlag.NONE);
             buffer.write("BLUE");
 
-            int attr1 = buffer.attributesAtScreen(0, 0);
-            int attr2 = buffer.attributesAtScreen(0, 3);
+            int attr1 = buffer.getAttributes(0, 0);
+            int attr2 = buffer.getAttributes(0, 3);
             assertNotEquals(attr1, attr2);
         }
 
@@ -509,7 +509,7 @@ class TerminalBufferTest {
             // Write with RED
             buffer.setAttributes(Style.Color.RED, Style.Color.BLACK, Style.StyleFlag.NONE);
             buffer.write("HELLO");
-            int originalAttr = buffer.attributesAtScreen(0, 4); // 'O'
+            int originalAttr = buffer.getAttributes(0, 4); // 'O'
 
             // Insert with BLUE at position 2
             buffer.setAttributes(Style.Color.BLUE, Style.Color.BLACK, Style.StyleFlag.NONE);
@@ -580,7 +580,7 @@ class TerminalBufferTest {
             buffer.write("\nNEW");
 
             // First line should be in scrollback
-            char firstChar = buffer.charAtScrollBack(0, 0);
+            char firstChar = buffer.getChar(-1, 0);
             assertEquals('L', firstChar); // 'L' from "LINE0"
         }
 
@@ -619,7 +619,7 @@ class TerminalBufferTest {
             }
 
             // Should have 3 lines in scrollback
-            assertDoesNotThrow(() -> buffer.charAtScrollBack(0, 0));
+            assertDoesNotThrow(() -> buffer.getChar(-1, 0));
         }
 
         @Test
@@ -650,8 +650,8 @@ class TerminalBufferTest {
         @DisplayName("Get character at position")
         void testGetCharAt() {
             buffer.write("HELLO", 2, 3);
-            assertEquals('H', buffer.charAtScreen(2, 3));
-            assertEquals('E', buffer.charAtScreen(2, 4));
+            assertEquals('H', buffer.getChar(2, 3));
+            assertEquals('E', buffer.getChar(2, 4));
         }
 
         @Test
@@ -660,7 +660,7 @@ class TerminalBufferTest {
             buffer.setAttributes(Style.Color.RED, Style.Color.BLACK, Style.StyleFlag.BOLD);
             buffer.write("X", 1, 5);
 
-            int attrs = buffer.attributesAtScreen(1, 5);
+            int attrs = buffer.getAttributes(1, 5);
             assertNotEquals(0, attrs);
         }
 
@@ -668,7 +668,7 @@ class TerminalBufferTest {
         @DisplayName("Get line as string")
         void testGetLineAsString() {
             buffer.write("TEST", 3, 2);
-            String line = buffer.lineToString(3);
+            String line = buffer.getLine(3);
             assertTrue(line.contains("TEST"));
         }
 
@@ -702,7 +702,7 @@ class TerminalBufferTest {
         @Test
         @DisplayName("Empty line returns spaces")
         void testEmptyLineString() {
-            String line = buffer.lineToString(0);
+            String line = buffer.getLine(0);
             assertEquals(WIDTH, line.length());
             assertTrue(line.trim().isEmpty());
         }
@@ -720,7 +720,7 @@ class TerminalBufferTest {
         @DisplayName("Fill line with character")
         void testFillLine() {
             buffer.fillLine(2, 'X');
-            String line = buffer.lineToString(2);
+            String line = buffer.getLine(2);
             assertEquals("X".repeat(WIDTH), line);
         }
 
@@ -729,7 +729,7 @@ class TerminalBufferTest {
         void testFillLineWithSpace() {
             buffer.write("HELLO", 1, 0);
             buffer.fillLine(1, ' ');
-            String line = buffer.lineToString(1);
+            String line = buffer.getLine(1);
             assertEquals(" ".repeat(WIDTH), line);
         }
 
@@ -740,7 +740,7 @@ class TerminalBufferTest {
             buffer.addEmptyLine();
 
             // Last line should be empty now
-            String lastLine = buffer.lineToString(HEIGHT - 1);
+            String lastLine = buffer.getLine(HEIGHT - 1);
             assertTrue(lastLine.trim().isEmpty());
         }
 
@@ -756,7 +756,7 @@ class TerminalBufferTest {
 
             // All lines should be empty
             for (int i = 0; i < HEIGHT; i++) {
-                String line = buffer.lineToString(i);
+                String line = buffer.getLine(i);
                 assertTrue(line.trim().isEmpty());
             }
 
@@ -777,7 +777,7 @@ class TerminalBufferTest {
             buffer.clearScreen();
 
             // Scrollback should still exist
-            assertDoesNotThrow(() -> buffer.charAtScrollBack(0, 0));
+            assertDoesNotThrow(() -> buffer.getChar(-1, 0));
         }
 
         @Test
@@ -793,7 +793,7 @@ class TerminalBufferTest {
 
             // Screen should be empty
             for (int i = 0; i < HEIGHT; i++) {
-                assertTrue(buffer.lineToString(i).trim().isEmpty());
+                assertTrue(buffer.getLine(i).trim().isEmpty());
             }
 
             // Cursor at origin
@@ -816,7 +816,7 @@ class TerminalBufferTest {
             buffer.write("A".repeat(WIDTH));
 
             // All characters on first line
-            assertEquals("A".repeat(WIDTH), buffer.lineToString(0));
+            assertEquals("A".repeat(WIDTH), buffer.getLine(0));
 
             assertEquals(0, buffer.cursor().row());
             assertEquals(WIDTH - 1, buffer.cursor().col());
@@ -828,8 +828,8 @@ class TerminalBufferTest {
             String text = "A".repeat(WIDTH + 1);
             buffer.write(text);
 
-            assertEquals("A".repeat(WIDTH), buffer.lineToString(0));
-            assertTrue(buffer.lineToString(1).startsWith("A"));
+            assertEquals("A".repeat(WIDTH), buffer.getLine(0));
+            assertTrue(buffer.getLine(1).startsWith("A"));
         }
 
         @Test
@@ -841,14 +841,14 @@ class TerminalBufferTest {
             buffer.insert("X");
 
             // Should have overflow to next line
-            assertFalse(buffer.lineToString(1).trim().isEmpty());
+            assertFalse(buffer.getLine(1).trim().isEmpty());
         }
 
         @Test
         @DisplayName("Operations on first line")
         void testFirstLineOperations() {
             buffer.write("FIRST", 0, 0);
-            assertEquals("FIRST", buffer.lineToString(0).substring(0, 5));
+            assertEquals("FIRST", buffer.getLine(0).substring(0, 5));
 
             buffer.cursor().up(10); // Try to go above
             assertEquals(0, buffer.cursor().row());
@@ -858,7 +858,7 @@ class TerminalBufferTest {
         @DisplayName("Operations on last line")
         void testLastLineOperations() {
             buffer.write("LAST", HEIGHT - 1, 0);
-            assertEquals("LAST", buffer.lineToString(HEIGHT - 1).substring(0, 4));
+            assertEquals("LAST", buffer.getLine(HEIGHT - 1).substring(0, 4));
 
             buffer.cursor().set(HEIGHT - 1, 0);
             buffer.cursor().down(10); // Try to go below
@@ -895,9 +895,9 @@ class TerminalBufferTest {
             buffer.cursor().right(2);
             buffer.write("C");
 
-            assertEquals('A', buffer.charAtScreen(0, 0));
-            assertEquals('B', buffer.charAtScreen(1, 1));
-            assertEquals('C', buffer.charAtScreen(0, 4));
+            assertEquals('A', buffer.getChar(0, 0));
+            assertEquals('B', buffer.getChar(1, 1));
+            assertEquals('C', buffer.getChar(0, 4));
         }
 
         @Test
@@ -920,7 +920,7 @@ class TerminalBufferTest {
 
             for (int i = 0; i < HEIGHT; i++) {
                 char expected = (char) ('A' + i);
-                assertEquals(expected, buffer.charAtScreen(i, 0));
+                assertEquals(expected, buffer.getChar(i, 0));
             }
         }
 
@@ -944,7 +944,7 @@ class TerminalBufferTest {
         void testLargeBuffer() {
             TerminalBuffer large = new TerminalBuffer(200, 100, 1000);
             large.write("TEST", 50, 100);
-            assertEquals('T', large.charAtScreen(50, 100));
+            assertEquals('T', large.getChar(50, 100));
         }
 
         @Test
@@ -976,7 +976,7 @@ class TerminalBufferTest {
             buffer.write("END");
 
             // Should not crash and end state should be valid
-            assertTrue(buffer.lineToString(0).contains("END"));
+            assertTrue(buffer.getLine(0).contains("END"));
         }
 
         @Test
@@ -991,10 +991,10 @@ class TerminalBufferTest {
             buffer.insert(">"); // Should clear pending wrap and insert
 
             // Line should start with ">"
-            assertTrue(buffer.lineToString(0).startsWith(">"));
+            assertTrue(buffer.getLine(0).startsWith(">"));
 
             // Should have wrapped
-            assertTrue(buffer.lineToString(1).startsWith("X"));
+            assertTrue(buffer.getLine(1).startsWith("X"));
         }
 
         @Test
@@ -1008,7 +1008,7 @@ class TerminalBufferTest {
             }
 
             // Screen should have last character
-            assertEquals('X', tiny.charAtScreen(0, 0)); // 'A' + 23 = 'X'
+            assertEquals('X', tiny.getChar(0, 0)); // 'A' + 23 = 'X'
 
             // Wait, 50 % 26 = 24, so 'A' + 24 = 'Y'
             // Actually (50-1) % 26 = 49 % 26 = 23 = 'X'... let me recalculate
@@ -1020,7 +1020,7 @@ class TerminalBufferTest {
             // Operations should still work
             tiny.clearScreen();
             tiny.write("Z");
-            assertEquals('Z', tiny.charAtScreen(0, 0));
+            assertEquals('Z', tiny.getChar(0, 0));
         }
     }
 
@@ -1038,7 +1038,7 @@ class TerminalBufferTest {
             assertEquals(WIDTH - 1, buffer.cursor().col());
 
             // All characters should be on first line
-            assertEquals("A".repeat(WIDTH), buffer.lineToString(0));
+            assertEquals("A".repeat(WIDTH), buffer.getLine(0));
         }
 
         @Test
@@ -1056,7 +1056,7 @@ class TerminalBufferTest {
             // Should have wrapped to next line
             assertEquals(1, buffer.cursor().row());
             assertEquals(1, buffer.cursor().col());
-            assertEquals('B', buffer.charAtScreen(1, 0));
+            assertEquals('B', buffer.getChar(1, 0));
         }
 
         @Test
@@ -1077,8 +1077,8 @@ class TerminalBufferTest {
             buffer.write("X");
 
             // Should overwrite the last 'A', not wrap
-            assertEquals('X', buffer.charAtScreen(0, WIDTH - 2));
-            assertEquals('A', buffer.charAtScreen(0, WIDTH - 1));
+            assertEquals('X', buffer.getChar(0, WIDTH - 2));
+            assertEquals('A', buffer.getChar(0, WIDTH - 1));
         }
 
         @Test
@@ -1111,7 +1111,7 @@ class TerminalBufferTest {
 
             // Write character - should overwrite first 'A'
             buffer.write("X");
-            assertEquals('X', buffer.charAtScreen(0, 0));
+            assertEquals('X', buffer.getChar(0, 0));
         }
 
         @Test
@@ -1123,9 +1123,9 @@ class TerminalBufferTest {
             buffer.write("C".repeat(WIDTH));
 
             // Should have 3 lines filled
-            assertEquals("A".repeat(WIDTH), buffer.lineToString(0));
-            assertEquals("B".repeat(WIDTH), buffer.lineToString(1));
-            assertEquals("C".repeat(WIDTH), buffer.lineToString(2));
+            assertEquals("A".repeat(WIDTH), buffer.getLine(0));
+            assertEquals("B".repeat(WIDTH), buffer.getLine(1));
+            assertEquals("C".repeat(WIDTH), buffer.getLine(2));
 
             // Cursor should be at end of line 2
             assertEquals(2, buffer.cursor().row());
@@ -1154,10 +1154,10 @@ class TerminalBufferTest {
             assertEquals(1, buffer.cursor().col());
 
             // 'X' should be on screen
-            assertEquals('X', buffer.charAtScreen(HEIGHT - 1, 0));
+            assertEquals('X', buffer.getChar(HEIGHT - 1, 0));
 
             // First line should be in scrollback
-            assertEquals('L', buffer.charAtScrollBack(0, 0));
+            assertEquals('L', buffer.getChar(-1, 0));
         }
 
         @Test
@@ -1172,9 +1172,9 @@ class TerminalBufferTest {
             buffer.insert("XYZ");
 
             // Should wrap first, then insert on line 1
-            assertEquals('X', buffer.charAtScreen(1, 0));
-            assertEquals('Y', buffer.charAtScreen(1, 1));
-            assertEquals('Z', buffer.charAtScreen(1, 2));
+            assertEquals('X', buffer.getChar(1, 0));
+            assertEquals('Y', buffer.getChar(1, 1));
+            assertEquals('Z', buffer.getChar(1, 2));
         }
 
         @Test
@@ -1188,7 +1188,7 @@ class TerminalBufferTest {
             // Write character - should overwrite at WIDTH/2, not wrap
             buffer.write("X");
 
-            assertEquals('X', buffer.charAtScreen(0, WIDTH / 2));
+            assertEquals('X', buffer.getChar(0, WIDTH / 2));
             assertEquals(WIDTH / 2 + 1, buffer.cursor().col());
         }
 
@@ -1208,10 +1208,10 @@ class TerminalBufferTest {
             buffer.write("B");
 
             // Last 'A' should have red attributes
-            assertEquals(redAttrs, buffer.attributesAtScreen(0, WIDTH - 1));
+            assertEquals(redAttrs, buffer.getAttributes(0, WIDTH - 1));
 
             // 'B' should have blue attributes
-            assertEquals(blueAttrs, buffer.attributesAtScreen(1, 0));
+            assertEquals(blueAttrs, buffer.getAttributes(1, 0));
         }
 
         @Test
@@ -1227,7 +1227,7 @@ class TerminalBufferTest {
             buffer.write("X", 1, 5);
 
             // Should write at (1, 5), not wrap from previous position
-            assertEquals('X', buffer.charAtScreen(1, 5));
+            assertEquals('X', buffer.getChar(1, 5));
         }
 
         // ============================================
@@ -1245,44 +1245,44 @@ class TerminalBufferTest {
             // Cursor should be at (0, 0) in pending wrap state
             assertEquals(0, tiny.cursor().row());
             assertEquals(0, tiny.cursor().col());
-            assertEquals('A', tiny.charAtScreen(0, 0));
+            assertEquals('A', tiny.getChar(0, 0));
 
             // Write second character - should trigger wrap and scroll
             tiny.write("B");
 
             // 'B' should now be on screen at (0, 0)
-            assertEquals('B', tiny.charAtScreen(0, 0));
+            assertEquals('B', tiny.getChar(0, 0));
             assertEquals(0, tiny.cursor().row());
             assertEquals(0, tiny.cursor().col());
 
             // 'A' should be in scrollback
             assertEquals(1, tiny.scrollbackSize());
-            assertEquals('A', tiny.charAtScrollBack(0, 0));
+            assertEquals('A', tiny.getChar(-1, 0));
 
             // Write third character
             tiny.write("C");
 
             // 'C' on screen, 'A' and 'B' in scrollback
-            assertEquals('C', tiny.charAtScreen(0, 0));
+            assertEquals('C', tiny.getChar(0, 0));
             assertEquals(2, tiny.scrollbackSize());
-            assertEquals('A', tiny.charAtScrollBack(0, 0));
-            assertEquals('B', tiny.charAtScrollBack(1, 0));
+            assertEquals('A', tiny.getChar(-2, 0));
+            assertEquals('B', tiny.getChar(-1, 0));
 
             // Write multiple characters in sequence
             tiny.write("DEFGH");
 
             // 'H' should be on screen (last character)
-            assertEquals('H', tiny.charAtScreen(0, 0));
+            assertEquals('H', tiny.getChar(0, 0));
 
             // Scrollback should have: A, B, C, D, E, F, G (7 lines, but max is 5)
             assertEquals(5, tiny.scrollbackSize()); // Max scrollback
 
             // Oldest lines evicted, should have: D, E, F, G, H on screen
-            assertEquals('C', tiny.charAtScrollBack(0, 0)); // Oldest in scrollback
-            assertEquals('D', tiny.charAtScrollBack(1, 0));
-            assertEquals('E', tiny.charAtScrollBack(2, 0));
-            assertEquals('F', tiny.charAtScrollBack(3, 0));
-            assertEquals('G', tiny.charAtScrollBack(4, 0)); // Wait, this should be on screen
+            assertEquals('C', tiny.getChar(-5, 0)); // Oldest in scrollback
+            assertEquals('D', tiny.getChar(-4, 0));
+            assertEquals('E', tiny.getChar(-3, 0));
+            assertEquals('F', tiny.getChar(-2, 0));
+            assertEquals('G', tiny.getChar(-1, 0)); // Wait, this should be on screen
 
         }
 
@@ -1294,7 +1294,7 @@ class TerminalBufferTest {
             tiny.write("A");
 
             // Cursor at (0, 0) in pending wrap
-            assertEquals('A', tiny.charAtScreen(0, 0));
+            assertEquals('A', tiny.getChar(0, 0));
 
             // Write newline - should scroll and clear pending wrap
             tiny.write("\n");
@@ -1330,7 +1330,7 @@ class TerminalBufferTest {
 
             // Write after movements - should overwrite 'X'
             tiny.write("Y");
-            assertEquals('Y', tiny.charAtScreen(0, 0));
+            assertEquals('Y', tiny.getChar(0, 0));
         }
 
         @Test
@@ -1343,17 +1343,17 @@ class TerminalBufferTest {
             int redAttrs = tiny.currentAttributes();
             tiny.write("R");
 
-            assertEquals(redAttrs, tiny.attributesAtScreen(0, 0));
+            assertEquals(redAttrs, tiny.getAttributes(0, 0));
 
             // Write with blue (triggers scroll)
             tiny.setAttributes(Style.Color.BLUE, Style.Color.BLACK, Style.StyleFlag.NONE);
             int blueAttrs = tiny.currentAttributes();
             tiny.write("B");
 
-            assertEquals(blueAttrs, tiny.attributesAtScreen(0, 0));
+            assertEquals(blueAttrs, tiny.getAttributes(0, 0));
 
             // Red 'R' should be in scrollback with correct attributes
-            assertEquals(redAttrs, tiny.attributesAtScrollback(0, 0));
+            assertEquals(redAttrs, tiny.getAttributes(-1, 0));
         }
 
         @Test
@@ -1365,11 +1365,11 @@ class TerminalBufferTest {
 
             // Fill line with 'X'
             tiny.fillLine(0, 'X');
-            assertEquals('X', tiny.charAtScreen(0, 0));
+            assertEquals('X', tiny.getChar(0, 0));
 
             // Clear screen
             tiny.clearScreen();
-            assertEquals(' ', tiny.charAtScreen(0, 0));
+            assertEquals(' ', tiny.getChar(0, 0));
             assertEquals(0, tiny.cursor().row());
             assertEquals(0, tiny.cursor().col());
         }
@@ -1392,7 +1392,7 @@ class TerminalBufferTest {
             buffer.insert("XXXXX");
 
             // Line should still be valid
-            String line = buffer.lineToString(0);
+            String line = buffer.getLine(0);
             assertEquals(WIDTH, line.length());
         }
 
@@ -1405,8 +1405,8 @@ class TerminalBufferTest {
             buffer.write("A".repeat(WIDTH + 5));
 
             // Check first and second line have correct attributes
-            assertEquals(attrs, buffer.attributesAtScreen(0, 0));
-            assertEquals(attrs, buffer.attributesAtScreen(1, 0));
+            assertEquals(attrs, buffer.getAttributes(0, 0));
+            assertEquals(attrs, buffer.getAttributes(1, 0));
         }
     }
 
@@ -1424,9 +1424,9 @@ class TerminalBufferTest {
         void testWideCharOccupies2Cells() {
             buffer.write(String.valueOf(CJK));
 
-            assertEquals(CJK, buffer.charAtScreen(0, 0));
+            assertEquals(CJK, buffer.getChar(0, 0));
             // Druga ćelija je placeholder
-            assertEquals('\u0000', buffer.charAtScreen(0, 1));
+            assertEquals('\u0000', buffer.getChar(0, 1));
         }
 
         @Test
@@ -1443,10 +1443,10 @@ class TerminalBufferTest {
         void testMixedWideAndNarrow() {
             buffer.write("A" + CJK + "B");
 
-            assertEquals('A', buffer.charAtScreen(0, 0));
-            assertEquals(CJK, buffer.charAtScreen(0, 1));
-            assertEquals('\u0000', buffer.charAtScreen(0, 2)); // placeholder
-            assertEquals('B', buffer.charAtScreen(0, 3));
+            assertEquals('A', buffer.getChar(0, 0));
+            assertEquals(CJK, buffer.getChar(0, 1));
+            assertEquals('\u0000', buffer.getChar(0, 2)); // placeholder
+            assertEquals('B', buffer.getChar(0, 3));
             assertEquals(4, buffer.cursor().col());
         }
 
@@ -1458,11 +1458,11 @@ class TerminalBufferTest {
             buffer.write(String.valueOf(CJK));
 
             // Poslednja ćelija linije 0 treba da bude space (padding)
-            assertEquals(' ', buffer.charAtScreen(0, WIDTH - 1));
+            assertEquals(' ', buffer.getChar(0, WIDTH - 1));
 
             // Wide karakter treba da bude na početku linije 1
-            assertEquals(CJK, buffer.charAtScreen(1, 0));
-            assertEquals('\u0000', buffer.charAtScreen(1, 1));
+            assertEquals(CJK, buffer.getChar(1, 0));
+            assertEquals('\u0000', buffer.getChar(1, 1));
         }
 
         @Test
@@ -1471,8 +1471,8 @@ class TerminalBufferTest {
             buffer.write("A".repeat(WIDTH - 2));
             buffer.write(String.valueOf(CJK));
 
-            assertEquals(CJK, buffer.charAtScreen(0, WIDTH - 2));
-            assertEquals('\u0000', buffer.charAtScreen(0, WIDTH - 1));
+            assertEquals(CJK, buffer.getChar(0, WIDTH - 2));
+            assertEquals('\u0000', buffer.getChar(0, WIDTH - 1));
             assertEquals(0, buffer.cursor().row());
             assertEquals(WIDTH - 1, buffer.cursor().col());
         }
@@ -1484,8 +1484,8 @@ class TerminalBufferTest {
             buffer.write(String.valueOf(CJK).repeat(WIDTH / 2));
 
             for (int i = 0; i < WIDTH / 2; i++) {
-                assertEquals(CJK, buffer.charAtScreen(0, i * 2));
-                assertEquals('\u0000', buffer.charAtScreen(0, i * 2 + 1));
+                assertEquals(CJK, buffer.getChar(0, i * 2));
+                assertEquals('\u0000', buffer.getChar(0, i * 2 + 1));
             }
 
             assertEquals(0, buffer.cursor().row());
@@ -1499,10 +1499,10 @@ class TerminalBufferTest {
             buffer.write(String.valueOf(CJK).repeat(WIDTH / 2 + 1));
 
             // Linija 0 — 5 wide karaktera (10 ćelija)
-            assertEquals(CJK, buffer.charAtScreen(0, 0));
+            assertEquals(CJK, buffer.getChar(0, 0));
             // Linija 1 — 1 wide karakter
-            assertEquals(CJK, buffer.charAtScreen(1, 0));
-            assertEquals('\u0000', buffer.charAtScreen(1, 1));
+            assertEquals(CJK, buffer.getChar(1, 0));
+            assertEquals('\u0000', buffer.getChar(1, 1));
         }
 
         @Test
@@ -1514,8 +1514,8 @@ class TerminalBufferTest {
             buffer.write(String.valueOf(CJK));
 
             // Obe ćelije treba da imaju iste atribute
-            assertEquals(redAttrs, buffer.attributesAtScreen(0, 0));
-            assertEquals(redAttrs, buffer.attributesAtScreen(0, 1));
+            assertEquals(redAttrs, buffer.getAttributes(0, 0));
+            assertEquals(redAttrs, buffer.getAttributes(0, 1));
         }
 
         @Test
@@ -1526,10 +1526,10 @@ class TerminalBufferTest {
 
             buffer.insert(String.valueOf(CJK));
 
-            assertEquals('A', buffer.charAtScreen(0, 0));
-            assertEquals(CJK, buffer.charAtScreen(0, 1));
-            assertEquals('\u0000', buffer.charAtScreen(0, 2));
-            assertEquals('B', buffer.charAtScreen(0, 3));
+            assertEquals('A', buffer.getChar(0, 0));
+            assertEquals(CJK, buffer.getChar(0, 1));
+            assertEquals('\u0000', buffer.getChar(0, 2));
+            assertEquals('B', buffer.getChar(0, 3));
         }
 
         @Test
@@ -1563,7 +1563,7 @@ class TerminalBufferTest {
         void testWideCharToString() {
             buffer.write("A" + CJK + "B");
 
-            String line = buffer.lineToString(0);
+            String line = buffer.getLine(0);
             // Placeholder \u0000 može biti prisutan — bitno je da CJK bude tu
             assertTrue(line.contains(String.valueOf(CJK)));
             assertTrue(line.contains("A"));
@@ -1577,11 +1577,11 @@ class TerminalBufferTest {
 
             // Scroll liniju u scrollback
             for (int i = 0; i < HEIGHT; i++) {
-                buffer.addEmptyLine();
+                buffer.write("A".repeat(WIDTH));
             }
 
-            assertEquals(CJK, buffer.charAtScrollBack(0, 0));
-            assertEquals('\u0000', buffer.charAtScrollBack(0, 1));
+            assertEquals(CJK, buffer.getChar(-1, 0));
+            assertEquals('\u0000', buffer.getChar(-1, 1));
         }
 
         @Test
@@ -1592,8 +1592,8 @@ class TerminalBufferTest {
             buffer.write(String.valueOf(CJK));
 
             // Treba da wrapa, CJK na liniji 1
-            assertEquals(CJK, buffer.charAtScreen(1, 0));
-            assertEquals('\u0000', buffer.charAtScreen(1, 1));
+            assertEquals(CJK, buffer.getChar(1, 0));
+            assertEquals('\u0000', buffer.getChar(1, 1));
         }
     }
 
@@ -1620,7 +1620,7 @@ class TerminalBufferTest {
             buffer.write("HELLO", 0, 0);
             buffer.resize(WIDTH, HEIGHT);
 
-            assertTrue(buffer.lineToString(0).contains("HELLO"));
+            assertTrue(buffer.getLine(0).contains("HELLO"));
         }
 
         @Test
@@ -1631,7 +1631,7 @@ class TerminalBufferTest {
             assertEquals(20, buffer.width());
             assertEquals(10, buffer.height());
             for (int i = 0; i < 10; i++) {
-                assertEquals(" ".repeat(20), buffer.lineToString(i));
+                assertEquals(" ".repeat(20), buffer.getLine(i));
             }
         }
 
@@ -1645,7 +1645,7 @@ class TerminalBufferTest {
             buffer.write("HELLO", 0, 0);
             buffer.resize(WIDTH * 2, HEIGHT);
 
-            assertTrue(buffer.lineToString(0).contains("HELLO"));
+            assertTrue(buffer.getLine(0).contains("HELLO"));
         }
 
         @Test
@@ -1655,9 +1655,9 @@ class TerminalBufferTest {
             buffer.resize(4, HEIGHT);       // nova širina 4
 
             // Prva linija treba da ima "ABCD"
-            assertTrue(buffer.lineToString(0).startsWith("ABCD"));
+            assertTrue(buffer.getLine(0).startsWith("ABCD"));
             // Druga linija treba da ima "EFGH"
-            assertTrue(buffer.lineToString(1).startsWith("EFGH"));
+            assertTrue(buffer.getLine(1).startsWith("EFGH"));
         }
 
         @Test
@@ -1670,8 +1670,8 @@ class TerminalBufferTest {
             // Proširi na 20 — sve treba da stane u jednu liniju
             buffer.resize(20, HEIGHT);
 
-            assertTrue(buffer.lineToString(0).contains("ABCDEFGHIJKL"));
-            assertTrue(buffer.lineToString(1).trim().isEmpty());
+            assertTrue(buffer.getLine(0).contains("ABCDEFGHIJKL"));
+            assertTrue(buffer.getLine(1).trim().isEmpty());
         }
 
         @Test
@@ -1681,8 +1681,8 @@ class TerminalBufferTest {
 
             buffer.resize(5, HEIGHT);
 
-            assertTrue(buffer.lineToString(0).startsWith("ABCDE"));
-            assertTrue(buffer.lineToString(1).startsWith("FGHIJ"));
+            assertTrue(buffer.getLine(0).startsWith("ABCDE"));
+            assertTrue(buffer.getLine(1).startsWith("FGHIJ"));
         }
 
         @Test
@@ -1693,8 +1693,8 @@ class TerminalBufferTest {
             buffer.resize(4, HEIGHT);
 
             // "AB" staje u prvu liniju, ne treba da se prelomi
-            assertTrue(buffer.lineToString(0).startsWith("AB"));
-            assertTrue(buffer.lineToString(1).trim().isEmpty());
+            assertTrue(buffer.getLine(0).startsWith("AB"));
+            assertTrue(buffer.getLine(1).trim().isEmpty());
         }
 
         // ============================================
@@ -1708,11 +1708,11 @@ class TerminalBufferTest {
             buffer.resize(WIDTH, HEIGHT + 3);
 
             assertEquals(HEIGHT + 3, buffer.height());
-            assertTrue(buffer.lineToString(0).contains("TOP"));
+            assertTrue(buffer.getLine(0).contains("TOP"));
 
             // Nove linije na dnu treba da budu prazne
             for (int i = HEIGHT; i < HEIGHT + 3; i++) {
-                assertTrue(buffer.lineToString(i).trim().isEmpty());
+                assertTrue(buffer.getLine(i).trim().isEmpty());
             }
         }
 
@@ -1808,7 +1808,7 @@ class TerminalBufferTest {
             buffer.resize(WIDTH * 2, HEIGHT);
 
             // Scrollback treba da ima sadržaj
-            assertDoesNotThrow(() -> buffer.charAtScrollBack(0, 0));
+            assertDoesNotThrow(() -> buffer.getChar(-1, 0));
         }
 
         @Test
@@ -1850,7 +1850,7 @@ class TerminalBufferTest {
             buffer.resize(WIDTH * 2, HEIGHT);
             buffer.resize(WIDTH, HEIGHT);
 
-            assertTrue(buffer.lineToString(0).contains("HELLO"));
+            assertTrue(buffer.getLine(0).contains("HELLO"));
             assertEquals(WIDTH, buffer.width());
             assertEquals(HEIGHT, buffer.height());
         }
@@ -1867,7 +1867,7 @@ class TerminalBufferTest {
 
             assertEquals(1, buffer.width());
             // Svaki karakter na svojoj liniji
-            assertEquals('A', buffer.charAtScreen(0, 0));
+            assertEquals('A', buffer.getChar(0, 0));
         }
 
         @Test
@@ -1877,7 +1877,7 @@ class TerminalBufferTest {
             buffer.resize(WIDTH, 1);
 
             assertEquals(1, buffer.height());
-            assertDoesNotThrow(() -> buffer.lineToString(0));
+            assertDoesNotThrow(() -> buffer.getLine(0));
         }
 
         @Test
@@ -1908,7 +1908,7 @@ class TerminalBufferTest {
             buffer.resize(20, 10);
             buffer.write("A".repeat(20));
 
-            assertEquals("A".repeat(20), buffer.lineToString(0));
+            assertEquals("A".repeat(20), buffer.getLine(0));
             // Kursor treba da bude na kraju prve linije
             assertEquals(0, buffer.cursor().row());
             assertEquals(19, buffer.cursor().col());
@@ -1923,7 +1923,7 @@ class TerminalBufferTest {
 
             buffer.resize(WIDTH * 2, HEIGHT);
 
-            assertEquals(redAttrs, buffer.attributesAtScreen(0, 0));
+            assertEquals(redAttrs, buffer.getAttributes(0, 0));
         }
     }
 
@@ -1939,10 +1939,10 @@ class TerminalBufferTest {
             buffer.write("A" + CJK + "B");
             buffer.resize(WIDTH * 2, HEIGHT);
 
-            assertEquals('A', buffer.charAtScreen(0, 0));
-            assertEquals(CJK, buffer.charAtScreen(0, 1));
-            assertEquals('\u0000', buffer.charAtScreen(0, 2));
-            assertEquals('B', buffer.charAtScreen(0, 3));
+            assertEquals('A', buffer.getChar(0, 0));
+            assertEquals(CJK, buffer.getChar(0, 1));
+            assertEquals('\u0000', buffer.getChar(0, 2));
+            assertEquals('B', buffer.getChar(0, 3));
         }
 
         @Test
@@ -1951,9 +1951,9 @@ class TerminalBufferTest {
             buffer.write("A" + CJK); // 3 cells: A, CJK, placeholder
             buffer.resize(4, HEIGHT); // treba da stane
 
-            assertEquals('A', buffer.charAtScreen(0, 0));
-            assertEquals(CJK, buffer.charAtScreen(0, 1));
-            assertEquals('\u0000', buffer.charAtScreen(0, 2));
+            assertEquals('A', buffer.getChar(0, 0));
+            assertEquals(CJK, buffer.getChar(0, 1));
+            assertEquals('\u0000', buffer.getChar(0, 2));
         }
 
         @Test
@@ -1965,12 +1965,12 @@ class TerminalBufferTest {
             // Linija 0: "A " ili "A" + CJK u zavisnosti od strategije
             // Linija 1: ostatak
             // Bitno je da ne crashuje i da sadržaj bude validan
-            assertDoesNotThrow(() -> buffer.lineToString(0));
-            assertDoesNotThrow(() -> buffer.lineToString(1));
+            assertDoesNotThrow(() -> buffer.getLine(0));
+            assertDoesNotThrow(() -> buffer.getLine(1));
 
             // Svaka linija mora biti tačno nove širine
-            assertEquals(2, buffer.lineToString(0).length());
-            assertEquals(2, buffer.lineToString(1).length());
+            assertEquals(2, buffer.getLine(0).length());
+            assertEquals(2, buffer.getLine(1).length());
         }
 
         @Test
@@ -1980,15 +1980,15 @@ class TerminalBufferTest {
             buffer.write(String.valueOf(CJK).repeat(4));
             buffer.resize(4, HEIGHT); // nova širina 4 — po 2 CJK po liniji
 
-            assertEquals(CJK, buffer.charAtScreen(0, 0));
-            assertEquals('\u0000', buffer.charAtScreen(0, 1));
-            assertEquals(CJK, buffer.charAtScreen(0, 2));
-            assertEquals('\u0000', buffer.charAtScreen(0, 3));
+            assertEquals(CJK, buffer.getChar(0, 0));
+            assertEquals('\u0000', buffer.getChar(0, 1));
+            assertEquals(CJK, buffer.getChar(0, 2));
+            assertEquals('\u0000', buffer.getChar(0, 3));
 
-            assertEquals(CJK, buffer.charAtScreen(1, 0));
-            assertEquals('\u0000', buffer.charAtScreen(1, 1));
-            assertEquals(CJK, buffer.charAtScreen(1, 2));
-            assertEquals('\u0000', buffer.charAtScreen(1, 3));
+            assertEquals(CJK, buffer.getChar(1, 0));
+            assertEquals('\u0000', buffer.getChar(1, 1));
+            assertEquals(CJK, buffer.getChar(1, 2));
+            assertEquals('\u0000', buffer.getChar(1, 3));
         }
 
         @Test
@@ -2017,15 +2017,15 @@ class TerminalBufferTest {
             buffer.write(String.valueOf(CJK)); // ne staje, padding + wrap
 
             // Linija 0: AAAAAAAAA + space (padding)
-            assertEquals(' ', buffer.charAtScreen(0, WIDTH - 1));
+            assertEquals(' ', buffer.getChar(0, WIDTH - 1));
             // Linija 1: CJK + placeholder
-            assertEquals(CJK, buffer.charAtScreen(1, 0));
+            assertEquals(CJK, buffer.getChar(1, 0));
 
             buffer.resize(WIDTH * 2, HEIGHT);
 
             // Posle widen — sadržaj treba da ostane validan
-            assertDoesNotThrow(() -> buffer.lineToString(0));
-            assertDoesNotThrow(() -> buffer.lineToString(1));
+            assertDoesNotThrow(() -> buffer.getLine(0));
+            assertDoesNotThrow(() -> buffer.getLine(1));
         }
 
         @Test
@@ -2047,9 +2047,9 @@ class TerminalBufferTest {
             buffer.resize(6, HEIGHT);
             buffer.write(String.valueOf(CJK).repeat(3)); // 3 * 2 = 6 cells, tačno nova širina
 
-            assertEquals(CJK, buffer.charAtScreen(0, 0));
-            assertEquals(CJK, buffer.charAtScreen(0, 2));
-            assertEquals(CJK, buffer.charAtScreen(0, 4));
+            assertEquals(CJK, buffer.getChar(0, 0));
+            assertEquals(CJK, buffer.getChar(0, 2));
+            assertEquals(CJK, buffer.getChar(0, 4));
             assertEquals(0, buffer.cursor().row());
             assertEquals(5, buffer.cursor().col());
         }
@@ -2075,7 +2075,7 @@ class TerminalBufferTest {
             // Bitno: ne crashuje, sadržaj je validan
             assertDoesNotThrow(() -> {
                 for (int i = 0; i < HEIGHT; i++) {
-                    String line = buffer.lineToString(i);
+                    String line = buffer.getLine(i);
                     assertEquals(3, line.length());
                 }
             });
@@ -2113,8 +2113,8 @@ class TerminalBufferTest {
             buffer.addEmptyLine();
 
             // Proveri da scrollback čuva atribute
-            assertEquals('L', buffer.charAtScrollBack(0, 0));
-            assertEquals(redAttrs, buffer.attributesAtScrollback(0, 0));
+            assertEquals('L', buffer.getChar(-1, 0));
+            assertEquals(redAttrs, buffer.getAttributes(-1, 0));
 
             // Promeni atribute i nastavi pisanje
             buffer.setAttributes(Style.Color.BLUE, Style.Color.BLACK, Style.StyleFlag.NONE);
@@ -2122,9 +2122,9 @@ class TerminalBufferTest {
             buffer.write("NEW", HEIGHT - 1, 0);
 
             // Screen treba da ima BLUE atribute
-            assertEquals(blueAttrs, buffer.attributesAtScreen(HEIGHT - 1, 0));
+            assertEquals(blueAttrs, buffer.getAttributes(HEIGHT - 1, 0));
             // Scrollback treba da ima RED atribute
-            assertEquals(redAttrs, buffer.attributesAtScrollback(0, 0));
+            assertEquals(redAttrs, buffer.getAttributes(-1, 0));
         }
 
         @Test
@@ -2139,7 +2139,7 @@ class TerminalBufferTest {
 
             // Sve linije moraju biti validne duzine
             for (int i = 0; i < HEIGHT; i++) {
-                assertEquals(WIDTH, buffer.lineToString(i).length());
+                assertEquals(WIDTH, buffer.getLine(i).length());
             }
 
             // Overflow mora da se desi
@@ -2165,8 +2165,8 @@ class TerminalBufferTest {
             buffer.setAttributes(Style.Color.BLUE, Style.Color.BLACK, Style.StyleFlag.NONE);
             buffer.write("FRESH START");
 
-            assertTrue(buffer.lineToString(0).startsWith("FRESH STAR"));
-            assertTrue(buffer.lineToString(1).startsWith("T"));
+            assertTrue(buffer.getLine(0).startsWith("FRESH STAR"));
+            assertTrue(buffer.getLine(1).startsWith("T"));
             assertEquals(1, buffer.cursor().row());
             assertEquals(1, buffer.cursor().col());
         }
@@ -2183,11 +2183,11 @@ class TerminalBufferTest {
             buffer.cursor().set(0, 0);
             buffer.insert("X"); // X A CJK \0 B
 
-            assertEquals('X', buffer.charAtScreen(0, 0));
-            assertEquals('A', buffer.charAtScreen(0, 1));
-            assertEquals(CJK, buffer.charAtScreen(0, 2));
-            assertEquals('\u0000', buffer.charAtScreen(0, 3));
-            assertEquals('B', buffer.charAtScreen(0, 4));
+            assertEquals('X', buffer.getChar(0, 0));
+            assertEquals('A', buffer.getChar(0, 1));
+            assertEquals(CJK, buffer.getChar(0, 2));
+            assertEquals('\u0000', buffer.getChar(0, 3));
+            assertEquals('B', buffer.getChar(0, 4));
         }
 
         @Test
@@ -2206,9 +2206,9 @@ class TerminalBufferTest {
 
             // CJK u scrollback treba da ima RED atribute na obe ćelije
             int scrollRow = 0;
-            assertEquals(CJK, buffer.charAtScrollBack(scrollRow, 0));
-            assertEquals(redAttrs, buffer.attributesAtScrollback(scrollRow, 0));
-            assertEquals(redAttrs, buffer.attributesAtScrollback(scrollRow, 1));
+            assertEquals(CJK, buffer.getChar(-1, 0));
+            assertEquals(redAttrs, buffer.getAttributes(-1, 0));
+            assertEquals(redAttrs, buffer.getAttributes(-1, 1));
         }
 
         // ============================================
@@ -2222,8 +2222,8 @@ class TerminalBufferTest {
             buffer.resize(3, HEIGHT);
 
             // "ABC" na liniji 0, "DE" na liniji 1
-            assertTrue(buffer.lineToString(0).startsWith("ABC"));
-            assertTrue(buffer.lineToString(1).startsWith("DE"));
+            assertTrue(buffer.getLine(0).startsWith("ABC"));
+            assertTrue(buffer.getLine(1).startsWith("DE"));
 
             // Nastavi pisanje
             buffer.cursor().set(0, 3);
@@ -2246,8 +2246,8 @@ class TerminalBufferTest {
             buffer.insert("X");
 
             // ABXCD... ali CD ispada na sledeću
-            assertTrue(buffer.lineToString(0).startsWith("ABX"));
-            assertEquals(4, buffer.lineToString(0).length());
+            assertTrue(buffer.getLine(0).startsWith("ABX"));
+            assertEquals(4, buffer.getLine(0).length());
         }
 
         @Test
@@ -2298,14 +2298,17 @@ class TerminalBufferTest {
             buffer.write("HELLO", 2, 3);
             buffer.cursor().set(2, 3);
 
+            buffer.write("HELLO", 2, 3);
+            buffer.cursor().set(2, 3);
+
             buffer.resize(WIDTH + 5, HEIGHT + 2);
 
             assertEquals(2, buffer.cursor().row());
             assertEquals(3, buffer.cursor().col());
 
-            // Nastavi pisanje — treba da radi normalno
             buffer.insert("WORLD");
-            assertEquals("WORLDHELLO", buffer.lineToString(2).substring(3, 13));
+
+            assertEquals("WORLDHELLO", buffer.getLine(2).substring(3, 13));
         }
 
         // ============================================
@@ -2395,7 +2398,7 @@ class TerminalBufferTest {
 
                 // Buffer treba da bude validan posle svake operacije
                 for (int row = 0; row < HEIGHT; row++) {
-                    assertEquals(WIDTH, buffer.lineToString(row).length());
+                    assertEquals(WIDTH, buffer.getLine(row).length());
                 }
             }
         }
@@ -2412,7 +2415,7 @@ class TerminalBufferTest {
 
                 assertEquals(widths[i], buffer.width());
                 assertEquals(heights[i], buffer.height());
-                assertEquals(buffer.lineToString(0).length(), widths[i]);
+                assertEquals(buffer.getLine(0).length(), widths[i]);
             }
         }
 
@@ -2429,7 +2432,7 @@ class TerminalBufferTest {
 
                 // Svaka linija mora biti tačno nove širine
                 for (int row = 0; row < HEIGHT; row++) {
-                    assertEquals(w, buffer.lineToString(row).length());
+                    assertEquals(w, buffer.getLine(row).length());
                 }
             }
         }
@@ -2451,13 +2454,13 @@ class TerminalBufferTest {
             assertEquals(0, buffer.cursor().row());
             assertEquals(0, buffer.cursor().col());
             for (int i = 0; i < HEIGHT; i++) {
-                assertEquals(" ".repeat(WIDTH), buffer.lineToString(i));
+                assertEquals(" ".repeat(WIDTH), buffer.getLine(i));
             }
 
             // Nastavi normalno pisanje posle clear
             buffer.write("AFTER CLEAR");
-            assertTrue(buffer.lineToString(0).startsWith("AFTER CLEA"));
-            assertTrue(buffer.lineToString(1).startsWith("R"));
+            assertTrue(buffer.getLine(0).startsWith("AFTER CLEA"));
+            assertTrue(buffer.getLine(1).startsWith("R"));
         }
 
         // Helper metoda

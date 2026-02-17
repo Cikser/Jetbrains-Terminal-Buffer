@@ -81,4 +81,13 @@ public class Cursor {
             default: break;
         }
     }
+
+    void advanceWide() {
+        if (col + 2 < owner.width()) {
+            right(2);
+        } else {
+            col = owner.width() - 1;
+            pendingWrap = true;
+        }
+    }
 }

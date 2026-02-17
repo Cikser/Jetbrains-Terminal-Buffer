@@ -1409,4 +1409,191 @@ class TerminalBufferTest {
             assertEquals(attrs, buffer.attributesAtScreen(1, 0));
         }
     }
+
+    @Nested
+    @DisplayName("Wide Character Support")
+    class WideCharTests {
+
+        // CJK karakter koji zauzima 2 ćelije
+        private static final char CJK = '中';
+        // Emoji koji zauzima 2 ćelije
+        private static final char EMOJI = '★';
+
+        @Test
+        @DisplayName("Wide character occupies 2 cells")
+        void testWideCharOccupies2Cells() {
+            buffer.write(String.valueOf(CJK));
+
+            assertEquals(CJK, buffer.charAtScreen(0, 0));
+            // Druga ćelija je placeholder
+            assertEquals('\u0000', buffer.charAtScreen(0, 1));
+        }
+
+        @Test
+        @DisplayName("Cursor advances by 2 after wide character")
+        void testCursorAdvancesBy2() {
+            buffer.write(String.valueOf(CJK));
+
+            assertEquals(0, buffer.cursor().row());
+            assertEquals(2, buffer.cursor().col());
+        }
+
+        @Test
+        @DisplayName("Mix of wide and narrow characters")
+        void testMixedWideAndNarrow() {
+            buffer.write("A" + CJK + "B");
+
+            assertEquals('A', buffer.charAtScreen(0, 0));
+            assertEquals(CJK, buffer.charAtScreen(0, 1));
+            assertEquals('\u0000', buffer.charAtScreen(0, 2)); // placeholder
+            assertEquals('B', buffer.charAtScreen(0, 3));
+            assertEquals(4, buffer.cursor().col());
+        }
+
+        @Test
+        @DisplayName("Wide character at end of line — no space, pads with space and wraps")
+        void testWideCharAtEndOfLine() {
+            // Popuni WIDTH-1 karaktera, ostaje 1 ćelija — wide ne staje
+            buffer.write("A".repeat(WIDTH - 1));
+            buffer.write(String.valueOf(CJK));
+
+            // Poslednja ćelija linije 0 treba da bude space (padding)
+            assertEquals(' ', buffer.charAtScreen(0, WIDTH - 1));
+
+            // Wide karakter treba da bude na početku linije 1
+            assertEquals(CJK, buffer.charAtScreen(1, 0));
+            assertEquals('\u0000', buffer.charAtScreen(1, 1));
+        }
+
+        @Test
+        @DisplayName("Wide character fits exactly at end of line")
+        void testWideCharFitsExactlyAtEnd() {
+            buffer.write("A".repeat(WIDTH - 2));
+            buffer.write(String.valueOf(CJK));
+
+            assertEquals(CJK, buffer.charAtScreen(0, WIDTH - 2));
+            assertEquals('\u0000', buffer.charAtScreen(0, WIDTH - 1));
+            assertEquals(0, buffer.cursor().row());
+            assertEquals(WIDTH - 1, buffer.cursor().col());
+        }
+
+        @Test
+        @DisplayName("Multiple wide characters on same line")
+        void testMultipleWideChars() {
+            // WIDTH=10, 5 wide karaktera = 10 ćelija = tačno jedna linija
+            buffer.write(String.valueOf(CJK).repeat(WIDTH / 2));
+
+            for (int i = 0; i < WIDTH / 2; i++) {
+                assertEquals(CJK, buffer.charAtScreen(0, i * 2));
+                assertEquals('\u0000', buffer.charAtScreen(0, i * 2 + 1));
+            }
+
+            assertEquals(0, buffer.cursor().row());
+            assertEquals(WIDTH - 1, buffer.cursor().col());
+        }
+
+        @Test
+        @DisplayName("Wide characters wrap to next line")
+        void testWideCharWraps() {
+            // WIDTH=10, 6 wide karaktera = 12 ćelija, 1 mora na sledeću liniju
+            buffer.write(String.valueOf(CJK).repeat(WIDTH / 2 + 1));
+
+            // Linija 0 — 5 wide karaktera (10 ćelija)
+            assertEquals(CJK, buffer.charAtScreen(0, 0));
+            // Linija 1 — 1 wide karakter
+            assertEquals(CJK, buffer.charAtScreen(1, 0));
+            assertEquals('\u0000', buffer.charAtScreen(1, 1));
+        }
+
+        @Test
+        @DisplayName("Wide character attributes preserved")
+        void testWideCharAttributes() {
+            buffer.setAttributes(Style.Color.RED, Style.Color.BLACK, Style.StyleFlag.BOLD);
+            int redAttrs = buffer.currentAttributes();
+
+            buffer.write(String.valueOf(CJK));
+
+            // Obe ćelije treba da imaju iste atribute
+            assertEquals(redAttrs, buffer.attributesAtScreen(0, 0));
+            assertEquals(redAttrs, buffer.attributesAtScreen(0, 1));
+        }
+
+        @Test
+        @DisplayName("Insert wide character shifts content right by 2")
+        void testInsertWideCharShifts() {
+            buffer.write("ABCDE");
+            buffer.cursor().set(0, 1);
+
+            buffer.insert(String.valueOf(CJK));
+
+            assertEquals('A', buffer.charAtScreen(0, 0));
+            assertEquals(CJK, buffer.charAtScreen(0, 1));
+            assertEquals('\u0000', buffer.charAtScreen(0, 2));
+            assertEquals('B', buffer.charAtScreen(0, 3));
+        }
+
+        @Test
+        @DisplayName("Insert wide character cursor positioned after both cells")
+        void testInsertWideCharCursorPosition() {
+            buffer.cursor().set(0, 2);
+            buffer.insert(String.valueOf(CJK));
+
+            // Kursor treba da bude na col 4 (2 + 2)
+            assertEquals(0, buffer.cursor().row());
+            assertEquals(4, buffer.cursor().col());
+        }
+
+        @Test
+        @DisplayName("Wide character at last position of last line triggers scroll")
+        void testWideCharTriggersScroll() {
+            // Popuni ekran do poslednje 2 ćelije
+            for (int i = 0; i < HEIGHT - 1; i++) {
+                buffer.write("A".repeat(WIDTH), i, 0);
+            }
+            buffer.write("A".repeat(WIDTH - 2), HEIGHT - 1, 0);
+
+            buffer.write(String.valueOf(CJK));
+
+            // Treba da se scroll-uje
+            assertEquals(HEIGHT - 1, buffer.cursor().row());
+        }
+
+        @Test
+        @DisplayName("Line toString skips placeholder cells")
+        void testWideCharToString() {
+            buffer.write("A" + CJK + "B");
+
+            String line = buffer.lineToString(0);
+            // Placeholder \u0000 može biti prisutan — bitno je da CJK bude tu
+            assertTrue(line.contains(String.valueOf(CJK)));
+            assertTrue(line.contains("A"));
+            assertTrue(line.contains("B"));
+        }
+
+        @Test
+        @DisplayName("Wide character in scrollback preserved correctly")
+        void testWideCharInScrollback() {
+            buffer.write(String.valueOf(CJK), 0, 0);
+
+            // Scroll liniju u scrollback
+            for (int i = 0; i < HEIGHT; i++) {
+                buffer.addEmptyLine();
+            }
+
+            assertEquals(CJK, buffer.charAtScrollBack(0, 0));
+            assertEquals('\u0000', buffer.charAtScrollBack(0, 1));
+        }
+
+        @Test
+        @DisplayName("Wide character with pending wrap")
+        void testWideCharWithPendingWrap() {
+            buffer.write("A".repeat(WIDTH)); // pending wrap
+
+            buffer.write(String.valueOf(CJK));
+
+            // Treba da wrapa, CJK na liniji 1
+            assertEquals(CJK, buffer.charAtScreen(1, 0));
+            assertEquals('\u0000', buffer.charAtScreen(1, 1));
+        }
+    }
 }

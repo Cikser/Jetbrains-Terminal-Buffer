@@ -56,15 +56,29 @@ public class TerminalBuffer {
         return cursor;
     }
 
-    public void write(String text){
-        for(char c : text.toCharArray()){
-            if(c == '\r' || c == '\n') {
+    public void write(String text) {
+        for (char c : text.toCharArray()) {
+            if (c == '\r' || c == '\n') {
                 cursor.handleChar(c);
                 continue;
             }
             cursor.resolveWrap();
-            screen.get(cursor.row()).set(cursor.col(), c, currentAttributes);
-            cursor.advance();
+
+            boolean wide = WideCharUtil.isWide(c);
+
+            if (wide && cursor.col() == width - 1) {
+                screen.get(cursor.row()).set(cursor.col(), ' ', currentAttributes);
+                cursor.advance();
+                cursor.resolveWrap();
+            }
+
+            if (wide) {
+                screen.get(cursor.row()).setWide(cursor.col(), c, currentAttributes);
+                cursor.advanceWide();
+            } else {
+                screen.get(cursor.row()).set(cursor.col(), c, currentAttributes);
+                cursor.advance();
+            }
         }
     }
 
@@ -185,16 +199,34 @@ public class TerminalBuffer {
         return text.length();
     }
 
-    public void insert(String text){
+    public void insert(String text) {
         cursor.resolveWrap();
-        int[] attributes = buildAttr(text.length());
-        boolean[] empty = buildEmpty(text.length());
         Deque<LineContent> insertQueue = new ArrayDeque<>();
 
         Cursor newCursor = calcFinalCursorPos(text);
 
-        insertAndOverflow(text, attributes, empty, insertQueue);
-        while (!insertQueue.isEmpty()){
+        StringBuilder expandedText = new StringBuilder();
+        List<Integer> expandedAttrs = new ArrayList<>();
+        List<Boolean> expandedEmpty = new ArrayList<>();
+
+        for (char c : text.toCharArray()) {
+            expandedText.append(c);
+            expandedAttrs.add(currentAttributes);
+            expandedEmpty.add(false);
+            if (WideCharUtil.isWide(c)) {
+                expandedText.append(Line.WIDE_PLACEHOLDER);
+                expandedAttrs.add(currentAttributes);
+                expandedEmpty.add(false);
+            }
+        }
+
+        String expanded = expandedText.toString();
+        int[] attributes = expandedAttrs.stream().mapToInt(x -> x).toArray();
+        boolean[] empty = new boolean[expandedEmpty.size()];
+        for (int i = 0; i < expandedEmpty.size(); i++) empty[i] = expandedEmpty.get(i);
+
+        insertAndOverflow(expanded, attributes, empty, insertQueue);
+        while (!insertQueue.isEmpty()) {
             LineContent lc = insertQueue.pop();
             insertAndOverflow(new String(lc.characters), lc.attributes, lc.empty, insertQueue);
         }
@@ -212,7 +244,15 @@ public class TerminalBuffer {
                 continue;
             }
             newCursor.resolveWrap();
-            newCursor.advance();
+            if (WideCharUtil.isWide(c)) {
+                if (newCursor.col() == width - 1) {
+                    newCursor.advance();
+                    newCursor.resolveWrap();
+                }
+                newCursor.advanceWide();
+            } else {
+                newCursor.advance();
+            }
         }
 
         return newCursor;

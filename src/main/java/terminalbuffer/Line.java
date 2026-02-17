@@ -133,4 +133,21 @@ public class Line {
         return empty[i];
     }
 
+    public static final char WIDE_PLACEHOLDER = '\u0000';
+
+    void setWide(int col, char character, int attributes) {
+
+        this.characters[col] = character;
+        this.attributes[col] = attributes;
+        this.empty[col] = false;
+
+        this.characters[col + 1] = WIDE_PLACEHOLDER;
+        this.attributes[col + 1] = attributes;
+        this.empty[col + 1] = false;
+    }
+
+    boolean isPlaceholder(int col) {
+        return characters[col] == WIDE_PLACEHOLDER;
+    }
+
 }

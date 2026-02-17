@@ -7,6 +7,8 @@ import org.junit.jupiter.api.Nested;
 import terminalbuffer.Style;
 import terminalbuffer.TerminalBuffer;
 
+import java.util.EnumSet;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class TerminalBufferTest {
@@ -425,7 +427,7 @@ class TerminalBufferTest {
         @Test
         @DisplayName("Set and get attributes")
         void testSetAttributes() {
-            buffer.setAttributes(Style.Color.RED, Style.Color.BLUE, Style.BOLD);
+            buffer.setAttributes(Style.Color.RED, Style.Color.BLUE, Style.StyleFlag.BOLD);
             int attrs = buffer.currentAttributes();
             assertNotEquals(0, attrs);
         }
@@ -433,7 +435,7 @@ class TerminalBufferTest {
         @Test
         @DisplayName("Written text uses current attributes")
         void testWriteWithAttributes() {
-            buffer.setAttributes(Style.Color.RED, Style.Color.BLACK, Style.BOLD);
+            buffer.setAttributes(Style.Color.RED, Style.Color.BLACK, Style.StyleFlag.BOLD);
             buffer.write("TEST");
 
             int attrs = buffer.attributesAtScreen(0, 0);
@@ -443,10 +445,10 @@ class TerminalBufferTest {
         @Test
         @DisplayName("Different attributes for different text")
         void testMultipleAttributes() {
-            buffer.setAttributes(Style.Color.RED, Style.Color.BLACK, Style.NONE);
+            buffer.setAttributes(Style.Color.RED, Style.Color.BLACK, Style.StyleFlag.NONE);
             buffer.write("RED");
 
-            buffer.setAttributes(Style.Color.BLUE, Style.Color.BLACK, Style.NONE);
+            buffer.setAttributes(Style.Color.BLUE, Style.Color.BLACK, Style.StyleFlag.NONE);
             buffer.write("BLUE");
 
             int attr1 = buffer.attributesAtScreen(0, 0);
@@ -458,12 +460,12 @@ class TerminalBufferTest {
         @DisplayName("Attributes preserved on insert")
         void testAttributesPreservedOnInsert() {
             // Write with RED
-            buffer.setAttributes(Style.Color.RED, Style.Color.BLACK, Style.NONE);
+            buffer.setAttributes(Style.Color.RED, Style.Color.BLACK, Style.StyleFlag.NONE);
             buffer.write("HELLO");
             int originalAttr = buffer.attributesAtScreen(0, 4); // 'O'
 
             // Insert with BLUE at position 2
-            buffer.setAttributes(Style.Color.BLUE, Style.Color.BLACK, Style.NONE);
+            buffer.setAttributes(Style.Color.BLUE, Style.Color.BLACK, Style.StyleFlag.NONE);
             buffer.cursor().set(0, 2);
             buffer.insert("XX");
 
@@ -475,7 +477,7 @@ class TerminalBufferTest {
         @Test
         @DisplayName("All 16 colors work")
         void testAllColors() {
-            int[] colors = {
+            Style.Color[] colors = {
                     Style.Color.BLACK, Style.Color.RED, Style.Color.GREEN,
                     Style.Color.YELLOW, Style.Color.BLUE, Style.Color.MAGENTA,
                     Style.Color.CYAN, Style.Color.WHITE, Style.Color.GRAY,
@@ -485,8 +487,8 @@ class TerminalBufferTest {
                     Style.Color.BRIGHT_WHITE
             };
 
-            for (int color : colors) {
-                buffer.setAttributes(color, Style.Color.BLACK, Style.NONE);
+            for (Style.Color color : colors) {
+                buffer.setAttributes(color, Style.Color.BLACK, Style.StyleFlag.NONE);
                 assertNotNull(buffer.currentAttributes());
             }
         }
@@ -494,18 +496,18 @@ class TerminalBufferTest {
         @Test
         @DisplayName("All style flags work")
         void testAllStyles() {
-            buffer.setAttributes(Style.Color.WHITE, Style.Color.BLACK, Style.BOLD);
+            buffer.setAttributes(Style.Color.WHITE, Style.Color.BLACK, Style.StyleFlag.BOLD);
             assertNotEquals(0, buffer.currentAttributes());
 
-            buffer.setAttributes(Style.Color.WHITE, Style.Color.BLACK, Style.ITALIC);
+            buffer.setAttributes(Style.Color.WHITE, Style.Color.BLACK, Style.StyleFlag.ITALIC);
             assertNotEquals(0, buffer.currentAttributes());
 
-            buffer.setAttributes(Style.Color.WHITE, Style.Color.BLACK, Style.UNDERLINE);
+            buffer.setAttributes(Style.Color.WHITE, Style.Color.BLACK, Style.StyleFlag.UNDERLINE);
             assertNotEquals(0, buffer.currentAttributes());
 
             // Combined styles
             buffer.setAttributes(Style.Color.WHITE, Style.Color.BLACK,
-                    Style.BOLD | Style.ITALIC | Style.UNDERLINE);
+                    EnumSet.of(Style.StyleFlag.UNDERLINE, Style.StyleFlag.BOLD, Style.StyleFlag.ITALIC));
             assertNotEquals(0, buffer.currentAttributes());
         }
     }
@@ -608,7 +610,7 @@ class TerminalBufferTest {
         @Test
         @DisplayName("Get attributes at position")
         void testGetAttributesAt() {
-            buffer.setAttributes(Style.Color.RED, Style.Color.BLACK, Style.BOLD);
+            buffer.setAttributes(Style.Color.RED, Style.Color.BLACK, Style.StyleFlag.BOLD);
             buffer.write("X", 1, 5);
 
             int attrs = buffer.attributesAtScreen(1, 5);
@@ -917,7 +919,7 @@ class TerminalBufferTest {
         @DisplayName("Mix of all operations")
         void testMixedOperations() {
             buffer.write("START");
-            buffer.setAttributes(Style.Color.RED, Style.Color.BLACK, Style.BOLD);
+            buffer.setAttributes(Style.Color.RED, Style.Color.BLACK, Style.StyleFlag.BOLD);
             buffer.cursor().down(2);
 
             buffer.insert("MID");
@@ -1146,13 +1148,13 @@ class TerminalBufferTest {
         @Test
         @DisplayName("Attributes preserved through pending wrap")
         void testAttributesPreservedThroughPendingWrap() {
-            buffer.setAttributes(Style.Color.RED, Style.Color.BLACK, Style.BOLD);
+            buffer.setAttributes(Style.Color.RED, Style.Color.BLACK, Style.StyleFlag.BOLD);
             int redAttrs = buffer.currentAttributes();
 
             buffer.write("A".repeat(WIDTH));
 
             // Change attributes
-            buffer.setAttributes(Style.Color.BLUE, Style.Color.BLACK, Style.NONE);
+            buffer.setAttributes(Style.Color.BLUE, Style.Color.BLACK, Style.StyleFlag.NONE);
             int blueAttrs = buffer.currentAttributes();
 
             // Write character to trigger wrap
@@ -1290,14 +1292,14 @@ class TerminalBufferTest {
             TerminalBuffer tiny = new TerminalBuffer(1, 1, 3);
 
             // Write with red
-            tiny.setAttributes(Style.Color.RED, Style.Color.BLACK, Style.BOLD);
+            tiny.setAttributes(Style.Color.RED, Style.Color.BLACK, Style.StyleFlag.BOLD);
             int redAttrs = tiny.currentAttributes();
             tiny.write("R");
 
             assertEquals(redAttrs, tiny.attributesAtScreen(0, 0));
 
             // Write with blue (triggers scroll)
-            tiny.setAttributes(Style.Color.BLUE, Style.Color.BLACK, Style.NONE);
+            tiny.setAttributes(Style.Color.BLUE, Style.Color.BLACK, Style.StyleFlag.NONE);
             int blueAttrs = tiny.currentAttributes();
             tiny.write("B");
 
@@ -1350,7 +1352,7 @@ class TerminalBufferTest {
         @Test
         @DisplayName("Attributes not lost during wrap")
         void testAttributesDuringWrap() {
-            buffer.setAttributes(Style.Color.RED, Style.Color.BLACK, Style.BOLD);
+            buffer.setAttributes(Style.Color.RED, Style.Color.BLACK, Style.StyleFlag.BOLD);
             int attrs = buffer.currentAttributes();
 
             buffer.write("A".repeat(WIDTH + 5));

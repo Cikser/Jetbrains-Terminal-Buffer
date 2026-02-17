@@ -12,14 +12,14 @@ public class Line {
     private int[] attributes;
     private boolean[] empty;
 
-    Line(TerminalBuffer owner){
-        characters = new char[owner.width()];
-        attributes = new int[owner.width()];
-        empty = new boolean[owner.width()];
+    Line(int width, int currentAttributes){
+        characters = new char[width];
+        attributes = new int[width];
+        empty = new boolean[width];
 
-        for(int i = 0; i < owner.width(); i++){
+        for(int i = 0; i < width; i++){
             characters[i] = ' ';
-            attributes[i] = owner.currentAttributes();
+            attributes[i] = currentAttributes;
             empty[i] = true;
         }
     }
@@ -69,7 +69,7 @@ public class Line {
         int overflowSize = textOverflowSize + lineOverflowSize;
 
         LineContent lc = createLineContent(overflowSize, text, attr, lineStartIndex, lineOverflowSize, textOverflowStart, textOverflowSize);
-        copyFromTextAndMove(elementsToCopy, text, attr, index, textLen, textOverflowStart);
+        copyFromTextAndMove(elementsToCopy, text, attr, index, textStartIndex, textLen, textOverflowStart);
 
         return lc;
     }
@@ -87,13 +87,13 @@ public class Line {
         return lc;
     }
 
-    void copyFromTextAndMove(int copiedSize, String text, int[] attr,  int lineStartIndex, int textLen, int textOverflowStart){
+    void copyFromTextAndMove(int copiedSize, String text, int[] attr,  int lineStartIndex, int textStartIndex, int textLen, int textOverflowStart){
         if(copiedSize > 0){
             System.arraycopy(characters, lineStartIndex, characters, lineStartIndex + textLen, copiedSize);
             System.arraycopy(attributes, lineStartIndex, attributes, lineStartIndex + textLen, copiedSize);
         }
-        System.arraycopy(text.toCharArray(), 0, characters, lineStartIndex, textOverflowStart);
-        System.arraycopy(attr, 0, attributes, lineStartIndex, textOverflowStart);
+        System.arraycopy(text.toCharArray(), textStartIndex, characters, lineStartIndex, textOverflowStart);
+        System.arraycopy(attr, textStartIndex, attributes, lineStartIndex, textOverflowStart);
     }
 
     boolean empty(){

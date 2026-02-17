@@ -1,53 +1,71 @@
 package terminalbuffer;
 
+import java.util.EnumSet;
+
 public class Style {
 
-    public static final int NONE = 0;
-    public static final int BOLD = 1;
-    public static final int ITALIC = 1 << 1;
-    public static final int UNDERLINE = 1 << 2;
+    public enum StyleFlag {
+        NONE(0),
+        BOLD(1),
+        ITALIC(1 << 1),
+        UNDERLINE(1 << 2);
 
-    public static class Color{
-        public static final int BLACK = 0;
-        public static final int RED = 1;
-        public static final int GREEN = 2;
-        public static final int YELLOW = 3;
-        public static final int BLUE = 4;
-        public static final int MAGENTA = 5;
-        public static final int CYAN = 6;
-        public static final int WHITE = 7;
-        public static final int GRAY = 8;
-        public static final int BRIGHT_RED = 9;
-        public static final int BRIGHT_GREEN = 10;
-        public static final int BRIGHT_YELLOW = 11;
-        public static final int BRIGHT_BLUE = 12;
-        public static final int BRIGHT_MAGENTA = 13;
-        public static final int BRIGHT_CYAN = 14;
-        public static final int BRIGHT_WHITE = 15;
+        public final int value;
+
+        StyleFlag(int value) {
+            this.value = value;
+        }
     }
 
-    public static int setAttributes(int fg, int bg, int style){
+    public enum Color {
+        BLACK(0), RED(1), GREEN(2), YELLOW(3),
+        BLUE(4), MAGENTA(5), CYAN(6), WHITE(7),
+        GRAY(8), BRIGHT_RED(9), BRIGHT_GREEN(10),
+        BRIGHT_YELLOW(11), BRIGHT_BLUE(12),
+        BRIGHT_MAGENTA(13), BRIGHT_CYAN(14), BRIGHT_WHITE(15);
+
+        public final int value;
+
+        Color(int value) {
+            this.value = value;
+        }
+    }
+
+    public static int setAttributes(Color fg, Color bg, EnumSet<StyleFlag> style){
         int attributes = 0;
-        attributes |= fg;
-        attributes |= (bg << 4);
-        attributes |= (style << 8);
+        attributes |= fg.value;
+        attributes |= (bg.value << 4);
+        for(StyleFlag flag : style){
+            attributes |= flag.value << 8;
+        }
         return attributes;
     }
 
-    public static int setForeground(int attributes, int fg){
-        return (attributes & ~0xF) | fg;
+    public static int setAttributes(Color fg, Color bg, StyleFlag style){
+        int attributes = 0;
+        attributes |= fg.value;
+        attributes |= (bg.value << 4);
+        attributes |= (style.value << 8);
+        return attributes;
     }
 
-    public static int setBackground(int attributes, int bg){
-        return (attributes & ~(0xF << 4)) | bg;
+    public static int setForeground(int attributes, Color fg){
+        return (attributes & ~0xF) | fg.value;
     }
 
-    public static int addAttribute(int attributes, int style){
-        return attributes | style;
+    public static int setBackground(int attributes, Color bg){
+        return (attributes & ~(0xF << 4)) | bg.value;
     }
 
-    public static int clearAttributes(int attributes){
-        return attributes & ~(0xFF);
+    public static int addAttribute(int attributes, EnumSet<StyleFlag> style){
+        for(StyleFlag flag : style){
+            attributes |= flag.value << 8 ;
+        }
+        return attributes;
+    }
+
+    public static int clearStyle(int attributes){
+        return attributes & (0xFF);
     }
 
 }

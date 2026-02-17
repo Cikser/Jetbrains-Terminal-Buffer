@@ -3,9 +3,9 @@ package terminalbuffer;
 import terminalbuffer.queue.BoundedQueue;
 
 import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Deque;
+import java.util.EnumSet;
 
 public class TerminalBuffer {
     private int width, height;
@@ -23,11 +23,11 @@ public class TerminalBuffer {
         screen = new BoundedQueue<>(height);
         scrollback = new BoundedQueue<>(maxScrollback);
 
-        currentAttributes = Style.setAttributes(Style.Color.WHITE, Style.Color.BLACK, Style.NONE);
+        currentAttributes = Style.setAttributes(Style.Color.WHITE, Style.Color.BLACK, Style.StyleFlag.NONE);
         cursor = new Cursor(this);
 
         for (int i = 0; i < height; i++){
-            screen.push(new Line(this));
+            screen.push(new Line(width, currentAttributes));
         }
     }
 
@@ -43,7 +43,11 @@ public class TerminalBuffer {
         return currentAttributes;
     }
 
-    public void setAttributes(int fg, int bg, int attributes){
+    public void setAttributes(Style.Color fg, Style.Color bg, EnumSet<Style.StyleFlag> attributes){
+        currentAttributes = Style.setAttributes(fg, bg, attributes);
+    }
+
+    public void setAttributes(Style.Color fg, Style.Color bg, Style.StyleFlag attributes){
         currentAttributes = Style.setAttributes(fg, bg, attributes);
     }
 
@@ -80,7 +84,7 @@ public class TerminalBuffer {
     void scroll(){
         Line removed = screen.pop();
         moveToScrollBack(removed);
-        screen.push(new Line(this));
+        screen.push(new Line(width, currentAttributes));
     }
 
     public void addEmptyLine(){
@@ -94,7 +98,7 @@ public class TerminalBuffer {
     public void clearScreen(){
         screen.clear();
         for(int i = 0; i < height; i++){
-            screen.push(new Line(this));
+            screen.push(new Line(width, currentAttributes));
         }
         cursor.set(0, 0);
     }
@@ -143,9 +147,7 @@ public class TerminalBuffer {
         return scrollback.get(row).getAttributes(col);
     }
 
-    private final Deque<LineContent> insertQueue = new ArrayDeque<>();
-
-    private void insertAndOverflow(String text, int[] attributes){
+    private void insertAndOverflow(String text, int[] attributes, Deque<LineContent> insertQueue){
         cursor.resolveWrap();
         int i = 0;
         int lastControl = -1;
@@ -188,23 +190,13 @@ public class TerminalBuffer {
 
     public void insert(String text){
         cursor.resolveWrap();
-        int row = cursor.row();
-        int col = cursor.col();
         int[] attributes = new int[text.length()];
         Arrays.fill(attributes, currentAttributes);
-        insertAndOverflow(text, attributes);
+        Deque<LineContent> insertQueue = new ArrayDeque<>();
+        insertAndOverflow(text, attributes, insertQueue);
         while (!insertQueue.isEmpty()){
             LineContent lc = insertQueue.pop();
-            if(lc == null)
-                continue;
-            text = new String(lc.characters);
-            attributes = lc.attributes;
-            insertAndOverflow(text, attributes);
-        }
-        cursor.set(row, col);
-        for (int i = 0; i < text.length(); i++){
-            cursor.resolveWrap();
-            cursor.advance();
+            insertAndOverflow(new String(lc.characters), lc.attributes, insertQueue);
         }
     }
 
@@ -212,6 +204,28 @@ public class TerminalBuffer {
         cursor.set(row, col);
         insert(text);
     }
+
+    public char getChar(int i, int j){
+        if(i >= 0){
+            return screen.get(i).getChar(j);
+        }
+        return scrollback.get(scrollback.size() + i).getChar(j);
+    }
+
+    public int getAttributes(int i, int j){
+        if(i >= 0){
+            return screen.get(i).getAttributes(j);
+        }
+        return scrollback.get(scrollback.size() + i).getAttributes(j);
+    }
+
+    public String getLine(int i){
+        if(i >= 0){
+            return screen.get(i).toString();
+        }
+        return scrollback.get(scrollback.size() + i).toString();
+    }
+
 
     void print(){
         for(int i = 0; i < screen.size(); i++) {
@@ -224,6 +238,7 @@ public class TerminalBuffer {
         TerminalBuffer buffer = new TerminalBuffer(3, 2, 10);
         String longText = "A".repeat(3 * 2 * 2);
         buffer.write(longText);
+        buffer.insert("ff", 0, 0);
         buffer.print();
     }
 

@@ -60,8 +60,16 @@ public class BoundedQueue<E> {
         tail = 0;
     }
 
-    public void resize(int newCapacity){
+    public void resize(int newCapacity, boolean copy){
         Object[] newElements = new Object[newCapacity];
+        if(!copy) {
+            list = newElements;
+            capacity = newCapacity;
+            head = 0;
+            tail = 0;
+            count = 0;
+            return;
+        }
         int elementsToCopy = Math.min(count, newCapacity);
 
         for (int i = 0, j = head; i < elementsToCopy; i++, j = (j + 1) % capacity) {

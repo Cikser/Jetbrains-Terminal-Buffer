@@ -146,7 +146,6 @@ public class TerminalBuffer {
         cursor.resolveWrap();
         int i = 0;
         int lastControl = -1;
-        char[] chars = new char[text.length()];
         while (i < text.length()){
             int controlChar = findControl(lastControl, text);
 
@@ -370,34 +369,7 @@ public class TerminalBuffer {
             }
         }
     }
-    /*
-    public void resize(int newWidth, int newHeight) {
-        // 1. Priprema i sakupljanje podataka
-        List<Line> allLines = collectLinesForReflow();
 
-        // 2. Mapiranje kursora na logički nivo pre transformacije
-        CursorAnchor anchor = calculateCursorAnchor(allLines);
-
-        // 3. Grupisanje u logičke blokove (pasuse)
-        List<List<StyledChar>> logicalBlocks = groupIntoLogicalBlocks(allLines);
-
-        // 4. Transformacija: Reflow blokova u nove fizičke linije
-        ReflowResult result = reflowAllBlocks(logicalBlocks, newWidth, anchor);
-
-        // 5. Primena novih dimenzija i bafera
-        this.width = newWidth;
-        this.height = newHeight;
-        rebuildBuffers(result.newLines, newHeight);
-
-        // 6. Finalno pozicioniranje kursora
-        restoreCursorPosition(result.newCursorRow, result.newCursorCol, result.newLines.size());
-    }
-
-
-    private record StyledChar(char c, int attr, boolean empty) {}
-    private record CursorAnchor(int blockIndex, int offset) {}
-    private record ReflowResult(List<Line> newLines, int newCursorRow, int newCursorCol) {}
-*/
     private List<Line> collectLinesForReflow() {
         List<Line> all = new ArrayList<>(scrollback.size() + findLastNonEmptyScreenLine());
         for (int i = 0; i < scrollback.size(); i++) all.add(scrollback.get(i));
@@ -416,68 +388,6 @@ public class TerminalBuffer {
         }
         return 0;
     }
-/*
-    private List<List<StyledChar>> groupIntoLogicalBlocks(List<Line> lines) {
-        List<List<StyledChar>> blocks = new ArrayList<>();
-        List<StyledChar> currentBlock = new ArrayList<>();
-
-        for (Line line : lines) {
-            if (!line.isWrapped() && !currentBlock.isEmpty()) {
-                blocks.add(new ArrayList<>(currentBlock));
-                currentBlock.clear();
-            }
-            for (int col = 0; col < this.width; col++) {
-                currentBlock.add(new StyledChar(line.getChar(col), line.getAttributes(col), line.isEmpty(col)));
-            }
-        }
-        if (!currentBlock.isEmpty()) blocks.add(currentBlock);
-        return blocks;
-    }
-
-    private ReflowResult reflowAllBlocks(List<List<StyledChar>> blocks, int newWidth, CursorAnchor anchor) {
-        List<Line> newLines = new ArrayList<>();
-        int resRow = -1, resCol = -1;
-
-        for (int idx = 0; idx < blocks.size(); idx++) {
-            List<StyledChar> block = blocks.get(idx);
-            trimTrailingSpaces(block);
-
-            // Određujemo koliko redova ovaj blok zauzima u novoj širini
-            int iterations = Math.max(block.size(), (idx == anchor.blockIndex ? anchor.offset + 1 : 0));
-
-            for (int i = 0; i < iterations; i += newWidth) {
-                Line newLine = new Line(newWidth, currentAttributes);
-                if (i > 0) newLine.setWrapped(true);
-
-                // Provera kursora
-                if (idx == anchor.blockIndex && anchor.offset >= i && anchor.offset < i + newWidth) {
-                    resRow = newLines.size();
-                    resCol = anchor.offset - i;
-                }
-
-                fillLineFromBlock(newLine, block, i, newWidth);
-                newLines.add(newLine);
-            }
-        }
-        return new ReflowResult(newLines, resRow, resCol);
-    }
-
-    private void fillLineFromBlock(Line targetLine, List<StyledChar> block, int startOffset, int width) {
-        for (int j = 0; j < width; j++) {
-            int blockIndex = startOffset + j;
-
-            // Ako još uvek imamo podataka u bloku, kopiraj ih
-            if (blockIndex < block.size()) {
-                StyledChar sc = block.get(blockIndex);
-                targetLine.set(j, sc.c(), sc.attr());
-            } else {
-                // Ako smo stigli do kraja bloka (npr. kursor je u "vazduhu"),
-                // ostatak linije ostaje popunjen podrazumevanim vrednostima (praznine)
-                // što je već definisano u konstruktoru Line klase.
-                break;
-            }
-        }
-    }*/
 
     private CursorAnchor calculateCursorAnchor(List<Line> lines) {
         int blockIdx = 0;
@@ -507,17 +417,6 @@ public class TerminalBuffer {
             cursor.set(Math.max(0, screen.size() - 1), 0);
         }
     }
-/*
-    private void trimTrailingSpaces(List<StyledChar> block) {
-        int lastNonSpace = -1;
-        for (int i = 0; i < block.size(); i++) {
-            if (block.get(i).c() != ' ') lastNonSpace = i;
-        }
-        if (lastNonSpace == -1) return;
-        if (lastNonSpace < block.size() - 1) {
-            block.subList(lastNonSpace + 1, block.size()).clear();
-        }
-    }*/
 
     private void rebuildBuffers(List<Line> newLines, int newHeight) {
         scrollback.clear();

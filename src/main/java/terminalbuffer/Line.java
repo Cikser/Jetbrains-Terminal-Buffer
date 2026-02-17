@@ -5,6 +5,7 @@ import java.util.Arrays;
 class LineContent{
     char[] characters;
     int[] attributes;
+    boolean[] empty;
 }
 
 public class Line {
@@ -50,7 +51,7 @@ public class Line {
         }
     }
 
-    LineContent insertAndOverflow(int index, String text, int[] attr, int textStartIndex, int textEndIndex){
+    LineContent insertAndOverflow(int index, String text, int[] attr, boolean[] empty, int textStartIndex, int textEndIndex){
         int capacity = characters.length;
         int textLen = textEndIndex - textStartIndex;
         int textOverflowSize = (index + textLen) > capacity ? textLen - (capacity - index) : 0;
@@ -68,32 +69,37 @@ public class Line {
 
         int overflowSize = textOverflowSize + lineOverflowSize;
 
-        LineContent lc = createLineContent(overflowSize, text, attr, lineStartIndex, lineOverflowSize, textOverflowStart, textOverflowSize);
-        copyFromTextAndMove(elementsToCopy, text, attr, index, textStartIndex, textLen, textOverflowStart);
+        LineContent lc = createLineContent(overflowSize, text, attr, empty, lineStartIndex, lineOverflowSize, textOverflowStart, textOverflowSize);
+        copyFromTextAndMove(elementsToCopy, text, attr, empty, index, textStartIndex, textLen, textOverflowStart);
 
         return lc;
     }
 
-    private LineContent createLineContent(int overflowSize, String text, int[] attr, int lineStartIndex, int lineOverflowSize, int textOverflowStart, int textOverflowSize){
+    private LineContent createLineContent(int overflowSize, String text, int[] attr, boolean[] empty, int lineStartIndex, int lineOverflowSize, int textOverflowStart, int textOverflowSize){
         if(overflowSize <= 0) return null;
         LineContent lc = new LineContent();
         lc.characters = new char[overflowSize];
         lc.attributes = new int[overflowSize];
+        lc.empty = new boolean[overflowSize];
 
         System.arraycopy(text.toCharArray(), textOverflowStart, lc.characters, 0, textOverflowSize);
         System.arraycopy(attr, textOverflowStart, lc.attributes, 0, textOverflowSize);
+        System.arraycopy(empty, textOverflowStart, lc.empty, 0, textOverflowSize);
         System.arraycopy(characters, lineStartIndex, lc.characters, textOverflowSize, lineOverflowSize);
         System.arraycopy(attributes, lineStartIndex, lc.attributes, textOverflowSize, lineOverflowSize);
+        System.arraycopy(this.empty, lineStartIndex, lc.empty, textOverflowSize, lineOverflowSize);
         return lc;
     }
 
-    void copyFromTextAndMove(int copiedSize, String text, int[] attr,  int lineStartIndex, int textStartIndex, int textLen, int textOverflowStart){
+    void copyFromTextAndMove(int copiedSize, String text, int[] attr, boolean[] empty, int lineStartIndex, int textStartIndex, int textLen, int textOverflowStart){
         if(copiedSize > 0){
             System.arraycopy(characters, lineStartIndex, characters, lineStartIndex + textLen, copiedSize);
             System.arraycopy(attributes, lineStartIndex, attributes, lineStartIndex + textLen, copiedSize);
+            System.arraycopy(this.empty, lineStartIndex, this.empty, lineStartIndex + textLen, copiedSize);
         }
         System.arraycopy(text.toCharArray(), textStartIndex, characters, lineStartIndex, textOverflowStart - textStartIndex);
         System.arraycopy(attr, textStartIndex, attributes, lineStartIndex, textOverflowStart - textStartIndex);
+        System.arraycopy(empty, textStartIndex, this.empty, lineStartIndex, textOverflowStart - textStartIndex);
     }
 
     boolean empty(){

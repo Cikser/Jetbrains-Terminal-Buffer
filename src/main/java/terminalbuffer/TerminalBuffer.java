@@ -13,7 +13,7 @@ public class TerminalBuffer {
     private int currentAttributes;
     private final BoundedQueue<Line> scrollback;
     private final BoundedQueue<Line> screen;
-    private final Cursor cursor;
+    private Cursor cursor;
 
     public TerminalBuffer(int width, int height, int maxScrollback){
         this.width = width;
@@ -147,7 +147,7 @@ public class TerminalBuffer {
         return scrollback.get(row).getAttributes(col);
     }
 
-    private void insertAndOverflow(String text, int[] attributes, Deque<LineContent> insertQueue){
+    private void insertAndOverflow(String text, int[] attributes, boolean[] empty, Deque<LineContent> insertQueue){
         cursor.resolveWrap();
         int i = 0;
         int lastControl = -1;
@@ -155,7 +155,7 @@ public class TerminalBuffer {
             int controlChar = findControl(lastControl, text);
 
             Line line = screen.get(cursor.row());
-            LineContent lc = line.insertAndOverflow(cursor.col(), text, attributes, lastControl + 1, controlChar);
+            LineContent lc = line.insertAndOverflow(cursor.col(), text, attributes, empty, lastControl + 1, controlChar);
             int shift = calcCursorShift(lc, lastControl + 1, controlChar);
             cursor.right(shift);
             cursor.resolveWrap();
@@ -187,39 +187,34 @@ public class TerminalBuffer {
     public void insert(String text){
         cursor.resolveWrap();
         int[] attributes = buildAttr(text.length());
+        boolean[] empty = buildEmpty(text.length());
         Deque<LineContent> insertQueue = new ArrayDeque<>();
 
-        int[] finalPos = calcFinalCursorPos(text, cursor.row(), cursor.col());
+        Cursor newCursor = calcFinalCursorPos(text);
 
-        insertAndOverflow(text, attributes, insertQueue);
+        insertAndOverflow(text, attributes, empty, insertQueue);
         while (!insertQueue.isEmpty()){
             LineContent lc = insertQueue.pop();
-            insertAndOverflow(new String(lc.characters), lc.attributes, insertQueue);
+            insertAndOverflow(new String(lc.characters), lc.attributes, lc.empty, insertQueue);
         }
 
-        cursor.set(finalPos[0], finalPos[1]);
+        cursor = newCursor;
     }
 
-    private int[] calcFinalCursorPos(String text, int startRow, int startCol) {
-        int row = startRow;
-        int col = startCol;
+    private Cursor calcFinalCursorPos(String text) {
+        Cursor newCursor = new Cursor(this);
+        newCursor.set(cursor.row(), cursor.col());
 
         for (char c : text.toCharArray()) {
-            if (c == '\n') {
-                row = Math.min(row + 1, height - 1);
-                col = 0;
-            } else if (c == '\r') {
-                col = 0;
-            } else {
-                if(col == width) {
-                    col = 0;
-                    row = Math.min(row + 1, height - 1);
-                }
-                col++;
+            if (c == '\n' || c == '\r') {
+                newCursor.handleChar(c);
+                continue;
             }
+            newCursor.resolveWrap();
+            newCursor.advance();
         }
 
-        return new int[]{row, col};
+        return newCursor;
     }
 
     public void insert(String text, int row, int col){
@@ -231,6 +226,12 @@ public class TerminalBuffer {
         int[] attr = new int[length];
         Arrays.fill(attr, currentAttributes);
         return attr;
+    }
+
+    private boolean[] buildEmpty(int length){
+        boolean[] empty = new boolean[length];
+        Arrays.fill(empty, false);
+        return empty;
     }
 
     public char getChar(int i, int j){
@@ -256,5 +257,15 @@ public class TerminalBuffer {
 
     public int scrollbackSize() {
         return scrollback.size();
+    }
+
+    public static void main(String[] args){
+        TerminalBuffer buffer = new TerminalBuffer(5, 3, 100);
+        buffer.write("AAAAA");
+        buffer.cursor.set(0, 4);
+        buffer.insert("X");
+        buffer.insert("Z");
+        System.out.println(buffer.screenToString());
+        System.out.println(buffer.cursor.row() + " " + buffer.cursor.col());
     }
 }

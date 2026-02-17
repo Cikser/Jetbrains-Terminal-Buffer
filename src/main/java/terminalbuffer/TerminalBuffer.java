@@ -328,17 +328,22 @@ public class TerminalBuffer {
     private record ReflowResult(List<Line> newLines, int newCursorRow, int newCursorCol) {}
 
     private List<Line> collectLinesForReflow() {
-        List<Line> all = new ArrayList<>(scrollback.size() + screen.size());
+        List<Line> all = new ArrayList<>(scrollback.size() + getScreenTrimIndex());
         for (int i = 0; i < scrollback.size(); i++) all.add(scrollback.get(i));
-
-        for (int i = 0; i < screen.size(); i++) {
+        for (int i = 0; i < getScreenTrimIndex(); i++) {
             Line line = screen.get(i);
-            // Čuvamo liniju ako nije prazna ILI ako je u njoj kursor
-            if (!line.empty() || i == cursor.row()) {
-                all.add(line);
-            }
+            all.add(line);
         }
         return all;
+    }
+
+    private int getScreenTrimIndex(){
+        for (int i = screen.size() - 1; i >= 0; i--){
+            if(screen.get(i).empty() && i != cursor.row())
+                continue;
+            return i + 1;
+        }
+        return 0;
     }
 
     private List<List<StyledChar>> groupIntoLogicalBlocks(List<Line> lines) {
@@ -437,6 +442,7 @@ public class TerminalBuffer {
         for (int i = 0; i < block.size(); i++) {
             if (block.get(i).c() != ' ') lastNonSpace = i;
         }
+        if (lastNonSpace == -1) return;
         if (lastNonSpace < block.size() - 1) {
             block.subList(lastNonSpace + 1, block.size()).clear();
         }
@@ -462,6 +468,20 @@ public class TerminalBuffer {
         while (screen.size() < newHeight) {
             screen.push(new Line(width, currentAttributes));
         }
+    }
+
+    public static void main(String []args){
+        int WIDTH = 10, HEIGHT = 5;
+        TerminalBuffer buffer = new TerminalBuffer(WIDTH, HEIGHT, 100);
+        buffer.write("HELLO", 2, 3);
+        buffer.cursor().set(2, 3);
+        System.out.println(buffer.screenToString());
+        buffer.resize(WIDTH + 5, HEIGHT + 2);
+        System.out.println(buffer.screenAndScrollbackToString());
+        System.out.println(buffer.cursor.row() + " " + buffer.cursor.col());
+
+        buffer.insert("WORLD");
+        System.out.println(buffer.screenToString());
     }
 
 }

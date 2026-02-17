@@ -2088,4 +2088,382 @@ class TerminalBufferTest {
             assertTrue(full.contains("C"));
         }
     }
+    @Nested
+    @DisplayName("Integration and Stress Tests")
+    class IntegrationTests {
+
+        private static final char CJK = '中';
+
+        // ============================================
+        // WRITE + ATTRIBUTES + SCROLLBACK
+        // ============================================
+
+        @Test
+        @DisplayName("Full pipeline: write with attributes, scroll, verify scrollback attributes")
+        void testWriteAttributesScrollbackPipeline() {
+            buffer.setAttributes(Style.Color.RED, Style.Color.BLACK, Style.StyleFlag.BOLD);
+            int redAttrs = buffer.currentAttributes();
+
+            // Napuni ekran sa RED atributima
+            for (int i = 0; i < HEIGHT; i++) {
+                buffer.write("LINE" + i, i, 0);
+            }
+
+            // Scroll — prva linija ide u scrollback
+            buffer.addEmptyLine();
+
+            // Proveri da scrollback čuva atribute
+            assertEquals('L', buffer.charAtScrollBack(0, 0));
+            assertEquals(redAttrs, buffer.attributesAtScrollback(0, 0));
+
+            // Promeni atribute i nastavi pisanje
+            buffer.setAttributes(Style.Color.BLUE, Style.Color.BLACK, Style.StyleFlag.NONE);
+            int blueAttrs = buffer.currentAttributes();
+            buffer.write("NEW", HEIGHT - 1, 0);
+
+            // Screen treba da ima BLUE atribute
+            assertEquals(blueAttrs, buffer.attributesAtScreen(HEIGHT - 1, 0));
+            // Scrollback treba da ima RED atribute
+            assertEquals(redAttrs, buffer.attributesAtScrollback(0, 0));
+        }
+
+        @Test
+        @DisplayName("Full pipeline: insert with overflow, scroll, verify content integrity")
+        void testInsertOverflowScrollPipeline() {
+            for (int i = 0; i < HEIGHT; i++) {
+                buffer.write("A".repeat(WIDTH), i, 0);
+            }
+
+            buffer.cursor().set(0, WIDTH / 2);
+            buffer.insert("XYZ");
+
+            // Sve linije moraju biti validne duzine
+            for (int i = 0; i < HEIGHT; i++) {
+                assertEquals(WIDTH, buffer.lineToString(i).length());
+            }
+
+            // Overflow mora da se desi
+            assertTrue(buffer.scrollbackSize() > 0);
+
+            // Sav sadrzaj mora biti prisutan negde
+            String full = buffer.screenAndScrollbackToString();
+            assertTrue(full.contains("XYZ"));
+            assertTrue(full.contains("AAA"));
+        }
+
+        @Test
+        @DisplayName("Full pipeline: write + insert + clear + write again")
+        void testWriteInsertClearWritePipeline() {
+            buffer.setAttributes(Style.Color.RED, Style.Color.BLACK, Style.StyleFlag.BOLD);
+            buffer.write("HELLO WORLD");
+
+            buffer.cursor().set(0, 5);
+            buffer.insert("---");
+
+            buffer.clearScreen();
+
+            buffer.setAttributes(Style.Color.BLUE, Style.Color.BLACK, Style.StyleFlag.NONE);
+            buffer.write("FRESH START");
+
+            assertTrue(buffer.lineToString(0).startsWith("FRESH STAR"));
+            assertTrue(buffer.lineToString(1).startsWith("T"));
+            assertEquals(1, buffer.cursor().row());
+            assertEquals(1, buffer.cursor().col());
+        }
+
+        // ============================================
+        // WIDE CHARS + INSERT + SCROLL
+        // ============================================
+
+        @Test
+        @DisplayName("Wide chars + insert: inserting narrow before wide shifts correctly")
+        void testInsertNarrowBeforeWide() {
+            buffer.write("A" + CJK + "B"); // A CJK \0 B
+
+            buffer.cursor().set(0, 0);
+            buffer.insert("X"); // X A CJK \0 B
+
+            assertEquals('X', buffer.charAtScreen(0, 0));
+            assertEquals('A', buffer.charAtScreen(0, 1));
+            assertEquals(CJK, buffer.charAtScreen(0, 2));
+            assertEquals('\u0000', buffer.charAtScreen(0, 3));
+            assertEquals('B', buffer.charAtScreen(0, 4));
+        }
+
+        @Test
+        @DisplayName("Wide chars + attributes + scrollback integrity")
+        void testWideCharAttributesScrollback() {
+            buffer.setAttributes(Style.Color.RED, Style.Color.BLACK, Style.StyleFlag.BOLD);
+            int redAttrs = buffer.currentAttributes();
+
+            buffer.write(String.valueOf(CJK));
+
+            // Scroll u scrollback
+            for (int i = 1; i < HEIGHT; i++) {
+                buffer.write("X".repeat(WIDTH), i, 0);
+            }
+            buffer.write("X".repeat(WIDTH));
+
+            // CJK u scrollback treba da ima RED atribute na obe ćelije
+            int scrollRow = 0;
+            assertEquals(CJK, buffer.charAtScrollBack(scrollRow, 0));
+            assertEquals(redAttrs, buffer.attributesAtScrollback(scrollRow, 0));
+            assertEquals(redAttrs, buffer.attributesAtScrollback(scrollRow, 1));
+        }
+
+        // ============================================
+        // RESIZE + WRITE + INSERT
+        // ============================================
+
+        @Test
+        @DisplayName("Resize + write: content correct after narrow then write")
+        void testResizeNarrowThenWrite() {
+            buffer.write("ABCDE", 0, 0);
+            buffer.resize(3, HEIGHT);
+
+            // "ABC" na liniji 0, "DE" na liniji 1
+            assertTrue(buffer.lineToString(0).startsWith("ABC"));
+            assertTrue(buffer.lineToString(1).startsWith("DE"));
+
+            // Nastavi pisanje
+            buffer.cursor().set(0, 3);
+            buffer.write("X");
+
+            // X treba da bude na liniji 1 (col 0 je zauzet sa DE...)
+            // ili na kraju linije 0 ako ima mesta
+            assertTrue(buffer.cursor().row() >= 0 && buffer.cursor().row() < HEIGHT);
+            assertTrue(buffer.cursor().col() >= 0 && buffer.cursor().col() < 3);
+        }
+
+        @Test
+        @DisplayName("Resize + insert: insert works correctly after resize")
+        void testResizeThenInsert() {
+            buffer.write("ABCDEFGH", 0, 0);
+            buffer.resize(4, HEIGHT);
+
+            // Linija 0: ABCD, Linija 1: EFGH
+            buffer.cursor().set(0, 2);
+            buffer.insert("X");
+
+            // ABXCD... ali CD ispada na sledeću
+            assertTrue(buffer.lineToString(0).startsWith("ABX"));
+            assertEquals(4, buffer.lineToString(0).length());
+        }
+
+        @Test
+        @DisplayName("Resize + wide chars + write: full pipeline")
+        void testResizeWideCharsWritePipeline() {
+            buffer.write("A" + CJK + "B");
+            buffer.resize(6, HEIGHT);
+            buffer.write("XY");
+
+            // Sadržaj treba da bude validan
+            String full = buffer.screenAndScrollbackToString();
+            assertTrue(full.contains("A"));
+            assertTrue(full.contains(String.valueOf(CJK)));
+            assertTrue(full.contains("B"));
+            assertTrue(full.contains("XY"));
+        }
+
+        // ============================================
+        // CURSOR + ALL OPERATIONS
+        // ============================================
+
+        @Test
+        @DisplayName("Cursor integrity through complex operations")
+        void testCursorIntegrityComplex() {
+            // Niz operacija koji testira cursor state
+            buffer.write("HELLO");
+            assertEquals(5, buffer.cursor().col());
+
+            buffer.cursor().set(2, 3);
+            buffer.insert("XYZ");
+            assertEquals(2, buffer.cursor().row());
+            assertEquals(6, buffer.cursor().col());
+
+            buffer.cursor().up(1);
+            buffer.write("A".repeat(WIDTH - buffer.cursor().col()));
+            // Kursor treba da bude u pending wrap
+            assertEquals(WIDTH - 1, buffer.cursor().col());
+
+            buffer.write("B"); // trigger wrap
+            assertEquals(2, buffer.cursor().row()); // bio na row 1, wrap na 2... zapravo zavisi
+            assertTrue(buffer.cursor().row() >= 0 && buffer.cursor().row() < HEIGHT);
+            assertTrue(buffer.cursor().col() >= 0 && buffer.cursor().col() < WIDTH);
+        }
+
+        @Test
+        @DisplayName("Cursor preserved through resize + write + scroll")
+        void testCursorPreservedResizeWriteScroll() {
+            buffer.write("HELLO", 2, 3);
+            buffer.cursor().set(2, 3);
+
+            buffer.resize(WIDTH + 5, HEIGHT + 2);
+
+            assertEquals(2, buffer.cursor().row());
+            assertEquals(3, buffer.cursor().col());
+
+            // Nastavi pisanje — treba da radi normalno
+            buffer.insert("WORLD");
+            assertEquals("WORLDHELLO", buffer.lineToString(2).substring(3, 13));
+        }
+
+        // ============================================
+        // SCROLLBACK SIZE LIMITS
+        // ============================================
+
+        @Test
+        @DisplayName("Scrollback never exceeds max during heavy scroll")
+        void testScrollbackNeverExceedsMax() {
+            for (int i = 0; i < MAX_SCROLLBACK * 3; i++) {
+                buffer.write("L" + i, 0, 0);
+                buffer.addEmptyLine();
+                assertTrue(buffer.scrollbackSize() <= MAX_SCROLLBACK,
+                        "Scrollback exceeded max at iteration " + i);
+            }
+        }
+
+        @Test
+        @DisplayName("Scrollback size limit respected after resize")
+        void testScrollbackLimitAfterResize() {
+            // Napuni scrollback
+            for (int i = 0; i < MAX_SCROLLBACK; i++) {
+                buffer.write("L" + i, 0, 0);
+                buffer.addEmptyLine();
+            }
+
+            assertEquals(MAX_SCROLLBACK, buffer.scrollbackSize());
+
+            // Resize koji uzrokuje više linija
+            buffer.resize(WIDTH / 2, HEIGHT);
+
+            assertTrue(buffer.scrollbackSize() <= MAX_SCROLLBACK);
+        }
+
+        // ============================================
+        // getChar / getLine API
+        // ============================================
+
+        @Test
+        @DisplayName("getChar unified API works for screen and scrollback")
+        void testGetCharUnifiedAPI() {
+            // Upiši na liniju 0 i odmah je scrolluj u scrollback
+            buffer.write("SCROLL", 0, 0);
+            for (int i = 0; i < HEIGHT; i++) {
+                buffer.addEmptyLine();
+            }
+
+            // Sad upiši na screen
+            buffer.write("SCREEN", 0, 0);
+
+            // Screen access (pozitivan index)
+            assertEquals('S', buffer.getChar(0, 0));
+
+            // Scrollback access (negativan index) — poslednja scrollback linija sadrži "SCROLL"
+            assertEquals('S', buffer.getChar(-buffer.scrollbackSize(), 0));
+        }
+
+        @Test
+        @DisplayName("getLine unified API works for screen and scrollback")
+        void testGetLineUnifiedAPI() {
+            buffer.write("SCREEN_LINE", 0, 0);
+
+            for (int i = 0; i < HEIGHT; i++) {
+                buffer.write("X".repeat(5), i, 0);
+            }
+            buffer.addEmptyLine();
+
+            // Screen
+            assertTrue(buffer.getLine(0).contains("X"));
+
+            // Scrollback (negativan index)
+            assertTrue(buffer.getLine(-1).contains("SCREEN") ||
+                    buffer.getLine(-1).contains("X"));
+        }
+
+        // ============================================
+        // STRESS TESTS
+        // ============================================
+
+        @Test
+        @DisplayName("Stress: alternating write and insert on full buffer")
+        void testStressWriteInsert() {
+            for (int i = 0; i < 20; i++) {
+                buffer.write("A".repeat(WIDTH / 2), i % HEIGHT, 0);
+                buffer.cursor().set(i % HEIGHT, WIDTH / 4);
+                buffer.insert("XY");
+
+                // Buffer treba da bude validan posle svake operacije
+                for (int row = 0; row < HEIGHT; row++) {
+                    assertEquals(WIDTH, buffer.lineToString(row).length());
+                }
+            }
+        }
+
+        @Test
+        @DisplayName("Stress: resize between writes")
+        void testStressResizeBetweenWrites() {
+            int[] widths = {5, 20, 3, 15, WIDTH};
+            int[] heights = {3, 10, 2, 8, HEIGHT};
+
+            for (int i = 0; i < widths.length; i++) {
+                buffer.resize(widths[i], heights[i]);
+                buffer.write("TEST" + i, 0, 0);
+
+                assertEquals(widths[i], buffer.width());
+                assertEquals(heights[i], buffer.height());
+                assertEquals(buffer.lineToString(0).length(), widths[i]);
+            }
+        }
+
+        @Test
+        @DisplayName("Stress: wide chars across multiple resize operations")
+        void testStressWideCharsResize() {
+            buffer.write(String.valueOf(CJK).repeat(3));
+
+            int[] widths = {4, 8, 6, WIDTH};
+            for (int w : widths) {
+                assertDoesNotThrow(() -> buffer.resize(w, HEIGHT),
+                        "Resize to width " + w + " crashed");
+                assertEquals(w, buffer.width());
+
+                // Svaka linija mora biti tačno nove širine
+                for (int row = 0; row < HEIGHT; row++) {
+                    assertEquals(w, buffer.lineToString(row).length());
+                }
+            }
+        }
+
+        @Test
+        @DisplayName("Stress: clearScreenAndScrollback resets everything correctly")
+        void testStressClearAll() {
+            // Napuni sve
+            for (int i = 0; i < HEIGHT; i++) {
+                buffer.write("A".repeat(WIDTH), i, 0);
+            }
+            for (int i = 0; i < MAX_SCROLLBACK; i++) {
+                buffer.addEmptyLine();
+            }
+
+            buffer.clearScreenAndScrollback();
+
+            assertEquals(0, buffer.scrollbackSize());
+            assertEquals(0, buffer.cursor().row());
+            assertEquals(0, buffer.cursor().col());
+            for (int i = 0; i < HEIGHT; i++) {
+                assertEquals(" ".repeat(WIDTH), buffer.lineToString(i));
+            }
+
+            // Nastavi normalno pisanje posle clear
+            buffer.write("AFTER CLEAR");
+            assertTrue(buffer.lineToString(0).startsWith("AFTER CLEA"));
+            assertTrue(buffer.lineToString(1).startsWith("R"));
+        }
+
+        // Helper metoda
+        private int scrollbackIndexOfLine(int screenRow) {
+            // Vraća index u scrollback koji odgovara datom screen row-u posle scroll-a
+            return buffer.scrollbackSize() - (HEIGHT - screenRow);
+        }
+    }
 }

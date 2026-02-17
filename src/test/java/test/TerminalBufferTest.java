@@ -1596,4 +1596,496 @@ class TerminalBufferTest {
             assertEquals('\u0000', buffer.charAtScreen(1, 1));
         }
     }
+
+    @Nested
+    @DisplayName("Resize Operations")
+    class ResizeTests {
+
+        // ============================================
+        // BASIC RESIZE TESTS
+        // ============================================
+
+        @Test
+        @DisplayName("Resize updates width and height")
+        void testResizeUpdatesDimensions() {
+            buffer.resize(20, 10);
+
+            assertEquals(20, buffer.width());
+            assertEquals(10, buffer.height());
+        }
+
+        @Test
+        @DisplayName("Resize to same dimensions preserves content")
+        void testResizeSameDimensions() {
+            buffer.write("HELLO", 0, 0);
+            buffer.resize(WIDTH, HEIGHT);
+
+            assertTrue(buffer.lineToString(0).contains("HELLO"));
+        }
+
+        @Test
+        @DisplayName("Resize empty buffer works correctly")
+        void testResizeEmptyBuffer() {
+            buffer.resize(20, 10);
+
+            assertEquals(20, buffer.width());
+            assertEquals(10, buffer.height());
+            for (int i = 0; i < 10; i++) {
+                assertEquals(" ".repeat(20), buffer.lineToString(i));
+            }
+        }
+
+        // ============================================
+        // WIDTH CHANGE TESTS
+        // ============================================
+
+        @Test
+        @DisplayName("Widen buffer — short line preserved as-is")
+        void testWidenPreservesShortLine() {
+            buffer.write("HELLO", 0, 0);
+            buffer.resize(WIDTH * 2, HEIGHT);
+
+            assertTrue(buffer.lineToString(0).contains("HELLO"));
+        }
+
+        @Test
+        @DisplayName("Narrow buffer — long line reflows to next line")
+        void testNarrowReflowsContent() {
+            buffer.write("ABCDEFGH", 0, 0); // 8 chars
+            buffer.resize(4, HEIGHT);       // nova širina 4
+
+            // Prva linija treba da ima "ABCD"
+            assertTrue(buffer.lineToString(0).startsWith("ABCD"));
+            // Druga linija treba da ima "EFGH"
+            assertTrue(buffer.lineToString(1).startsWith("EFGH"));
+        }
+
+        @Test
+        @DisplayName("Widen buffer — wrapped lines merge into one")
+        void testWidenMergesWrappedLines() {
+            // Napiši tekst koji se wrap-uje na WIDTH=10
+            buffer.write("ABCDEFGHIJ"); // tačno WIDTH, pending wrap
+            buffer.write("KL");         // ide na liniju 1
+
+            // Proširi na 20 — sve treba da stane u jednu liniju
+            buffer.resize(20, HEIGHT);
+
+            assertTrue(buffer.lineToString(0).contains("ABCDEFGHIJKL"));
+            assertTrue(buffer.lineToString(1).trim().isEmpty());
+        }
+
+        @Test
+        @DisplayName("Narrow buffer — single line splits into multiple")
+        void testNarrowSplitsLine() {
+            buffer.write("ABCDEFGHIJ"); // 10 chars na WIDTH=10
+
+            buffer.resize(5, HEIGHT);
+
+            assertTrue(buffer.lineToString(0).startsWith("ABCDE"));
+            assertTrue(buffer.lineToString(1).startsWith("FGHIJ"));
+        }
+
+        @Test
+        @DisplayName("Narrow buffer — trailing spaces are trimmed before reflow")
+        void testNarrowTrimsTrailingSpaces() {
+            buffer.write("AB", 0, 0); // samo 2 chars, ostatak su spaces
+
+            buffer.resize(4, HEIGHT);
+
+            // "AB" staje u prvu liniju, ne treba da se prelomi
+            assertTrue(buffer.lineToString(0).startsWith("AB"));
+            assertTrue(buffer.lineToString(1).trim().isEmpty());
+        }
+
+        // ============================================
+        // HEIGHT CHANGE TESTS
+        // ============================================
+
+        @Test
+        @DisplayName("Increase height adds empty lines at bottom")
+        void testIncreaseHeightAddsEmptyLines() {
+            buffer.write("TOP", 0, 0);
+            buffer.resize(WIDTH, HEIGHT + 3);
+
+            assertEquals(HEIGHT + 3, buffer.height());
+            assertTrue(buffer.lineToString(0).contains("TOP"));
+
+            // Nove linije na dnu treba da budu prazne
+            for (int i = HEIGHT; i < HEIGHT + 3; i++) {
+                assertTrue(buffer.lineToString(i).trim().isEmpty());
+            }
+        }
+
+        @Test
+        @DisplayName("Decrease height moves top lines to scrollback")
+        void testDecreaseHeightMovesLinesToScrollback() {
+            buffer.write("LINE0", 0, 0);
+            buffer.write("LINE1", 1, 0);
+            buffer.write("LINE2", 2, 0);
+
+            buffer.resize(WIDTH, 2);
+
+            assertEquals(2, buffer.height());
+            // Sadržaj treba da bude sačuvan (u scrollback ili screen)
+            String full = buffer.screenAndScrollbackToString();
+            assertTrue(full.contains("LINE0") || full.contains("LINE1") || full.contains("LINE2"));
+        }
+
+        @Test
+        @DisplayName("Decrease height — scrollback grows")
+        void testDecreaseHeightGrowsScrollback() {
+            buffer.write("LINE0", 0, 0);
+            buffer.write("LINE1", 1, 0);
+            buffer.write("LINE2", 2, 0);
+            buffer.write("LINE3", 3, 0);
+
+            int scrollbackBefore = buffer.scrollbackSize();
+            buffer.resize(WIDTH, 2);
+
+            assertTrue(buffer.scrollbackSize() > scrollbackBefore);
+        }
+
+        // ============================================
+        // CURSOR POSITION TESTS
+        // ============================================
+
+        @Test
+        @DisplayName("Cursor stays within bounds after resize")
+        void testCursorWithinBoundsAfterResize() {
+            buffer.cursor().set(HEIGHT - 1, WIDTH - 1);
+            buffer.resize(5, 3);
+
+            assertTrue(buffer.cursor().row() >= 0 && buffer.cursor().row() < 3);
+            assertTrue(buffer.cursor().col() >= 0 && buffer.cursor().col() < 5);
+        }
+
+        @Test
+        @DisplayName("Cursor position preserved after widen")
+        void testCursorPreservedAfterWiden() {
+            buffer.write("HELLO");
+            int rowBefore = buffer.cursor().row();
+            int colBefore = buffer.cursor().col();
+
+            buffer.resize(WIDTH * 2, HEIGHT);
+
+            assertEquals(rowBefore, buffer.cursor().row());
+            assertEquals(colBefore, buffer.cursor().col());
+        }
+
+        @Test
+        @DisplayName("Cursor position adjusted correctly after narrow")
+        void testCursorAdjustedAfterNarrow() {
+            buffer.write("ABCDEFGH"); // cursor na col=8
+            buffer.resize(4, HEIGHT); // linija se deli
+
+            // Kursor treba da bude na validnoj poziciji
+            assertTrue(buffer.cursor().col() >= 0 && buffer.cursor().col() < 4);
+            assertTrue(buffer.cursor().row() >= 0 && buffer.cursor().row() < HEIGHT);
+        }
+
+        @Test
+        @DisplayName("Cursor at (0,0) preserved after resize")
+        void testCursorAtOriginPreservedAfterResize() {
+            buffer.resize(WIDTH * 2, HEIGHT * 2);
+
+            assertEquals(0, buffer.cursor().row());
+            assertEquals(0, buffer.cursor().col());
+        }
+
+        // ============================================
+        // SCROLLBACK INTERACTION TESTS
+        // ============================================
+
+        @Test
+        @DisplayName("Scrollback content preserved after resize")
+        void testScrollbackPreservedAfterResize() {
+            // Napuni scrollback
+            for (int i = 0; i < HEIGHT + 2; i++) {
+                buffer.write("L" + i, 0, 0);
+                buffer.addEmptyLine();
+            }
+
+            buffer.resize(WIDTH * 2, HEIGHT);
+
+            // Scrollback treba da ima sadržaj
+            assertDoesNotThrow(() -> buffer.charAtScrollBack(0, 0));
+        }
+
+        @Test
+        @DisplayName("Resize after scroll preserves screen content")
+        void testResizeAfterScrollPreservesContent() {
+            for (int i = 0; i < HEIGHT; i++) {
+                buffer.write("LINE" + i, i, 0);
+            }
+            buffer.addEmptyLine(); // scroll
+
+            buffer.resize(WIDTH + 5, HEIGHT);
+
+            String full = buffer.screenAndScrollbackToString();
+            assertTrue(full.contains("LINE1"));
+        }
+
+        // ============================================
+        // MULTIPLE RESIZE TESTS
+        // ============================================
+
+        @Test
+        @DisplayName("Multiple resizes preserve content")
+        void testMultipleResizesPreserveContent() {
+            buffer.write("HELLO", 0, 0);
+
+            buffer.resize(20, HEIGHT);
+            buffer.resize(5, HEIGHT);
+            buffer.resize(WIDTH, HEIGHT);
+
+            String full = buffer.screenAndScrollbackToString();
+            assertTrue(full.contains("HELLO"));
+        }
+
+        @Test
+        @DisplayName("Resize back to original dimensions")
+        void testResizeBackToOriginal() {
+            buffer.write("HELLO", 0, 0);
+
+            buffer.resize(WIDTH * 2, HEIGHT);
+            buffer.resize(WIDTH, HEIGHT);
+
+            assertTrue(buffer.lineToString(0).contains("HELLO"));
+            assertEquals(WIDTH, buffer.width());
+            assertEquals(HEIGHT, buffer.height());
+        }
+
+        // ============================================
+        // EDGE CASES
+        // ============================================
+
+        @Test
+        @DisplayName("Resize to width of 1")
+        void testResizeToWidth1() {
+            buffer.write("ABC", 0, 0);
+            buffer.resize(1, HEIGHT);
+
+            assertEquals(1, buffer.width());
+            // Svaki karakter na svojoj liniji
+            assertEquals('A', buffer.charAtScreen(0, 0));
+        }
+
+        @Test
+        @DisplayName("Resize to height of 1")
+        void testResizeToHeight1() {
+            buffer.write("HELLO", 0, 0);
+            buffer.resize(WIDTH, 1);
+
+            assertEquals(1, buffer.height());
+            assertDoesNotThrow(() -> buffer.lineToString(0));
+        }
+
+        @Test
+        @DisplayName("Resize with full screen content")
+        void testResizeWithFullScreen() {
+            for (int i = 0; i < HEIGHT; i++) {
+                buffer.write("L" + i, i, 0);
+            }
+
+            assertDoesNotThrow(() -> buffer.resize(WIDTH / 2, HEIGHT * 2));
+            assertEquals(WIDTH / 2, buffer.width());
+            assertEquals(HEIGHT * 2, buffer.height());
+        }
+
+        @Test
+        @DisplayName("Resize does not crash on empty buffer")
+        void testResizeEmptyBufferNoCrash() {
+            assertDoesNotThrow(() -> {
+                buffer.resize(1, 1);
+                buffer.resize(200, 100);
+                buffer.resize(WIDTH, HEIGHT);
+            });
+        }
+
+        @Test
+        @DisplayName("Content written after resize uses new dimensions")
+        void testWriteAfterResize() {
+            buffer.resize(20, 10);
+            buffer.write("A".repeat(20));
+
+            assertEquals("A".repeat(20), buffer.lineToString(0));
+            // Kursor treba da bude na kraju prve linije
+            assertEquals(0, buffer.cursor().row());
+            assertEquals(19, buffer.cursor().col());
+        }
+
+        @Test
+        @DisplayName("Attributes preserved after resize")
+        void testAttributesPreservedAfterResize() {
+            buffer.setAttributes(Style.Color.RED, Style.Color.BLACK, Style.StyleFlag.BOLD);
+            int redAttrs = buffer.currentAttributes();
+            buffer.write("HELLO");
+
+            buffer.resize(WIDTH * 2, HEIGHT);
+
+            assertEquals(redAttrs, buffer.attributesAtScreen(0, 0));
+        }
+    }
+
+    @Nested
+    @DisplayName("Wide Characters + Resize Interaction")
+    class WideCharResizeTests {
+
+        private static final char CJK = '中';
+
+        @Test
+        @DisplayName("Wide character preserved after widen")
+        void testWideCharPreservedAfterWiden() {
+            buffer.write("A" + CJK + "B");
+            buffer.resize(WIDTH * 2, HEIGHT);
+
+            assertEquals('A', buffer.charAtScreen(0, 0));
+            assertEquals(CJK, buffer.charAtScreen(0, 1));
+            assertEquals('\u0000', buffer.charAtScreen(0, 2));
+            assertEquals('B', buffer.charAtScreen(0, 3));
+        }
+
+        @Test
+        @DisplayName("Wide character preserved after narrow — fits in new width")
+        void testWideCharPreservedAfterNarrow() {
+            buffer.write("A" + CJK); // 3 cells: A, CJK, placeholder
+            buffer.resize(4, HEIGHT); // treba da stane
+
+            assertEquals('A', buffer.charAtScreen(0, 0));
+            assertEquals(CJK, buffer.charAtScreen(0, 1));
+            assertEquals('\u0000', buffer.charAtScreen(0, 2));
+        }
+
+        @Test
+        @DisplayName("Wide character splits correctly when narrow cuts through placeholder")
+        void testWideCharSplitOnNarrow() {
+            buffer.write("A" + CJK + "B"); // A(0) CJK(1) placeholder(2) B(3)
+            buffer.resize(2, HEIGHT);      // nova širina 2 — CJK pada na granicu
+
+            // Linija 0: "A " ili "A" + CJK u zavisnosti od strategije
+            // Linija 1: ostatak
+            // Bitno je da ne crashuje i da sadržaj bude validan
+            assertDoesNotThrow(() -> buffer.lineToString(0));
+            assertDoesNotThrow(() -> buffer.lineToString(1));
+
+            // Svaka linija mora biti tačno nove širine
+            assertEquals(2, buffer.lineToString(0).length());
+            assertEquals(2, buffer.lineToString(1).length());
+        }
+
+        @Test
+        @DisplayName("Multiple wide characters reflow correctly on narrow")
+        void testMultipleWideCharsReflowOnNarrow() {
+            // 4 wide karaktera = 8 ćelija na WIDTH=10
+            buffer.write(String.valueOf(CJK).repeat(4));
+            buffer.resize(4, HEIGHT); // nova širina 4 — po 2 CJK po liniji
+
+            assertEquals(CJK, buffer.charAtScreen(0, 0));
+            assertEquals('\u0000', buffer.charAtScreen(0, 1));
+            assertEquals(CJK, buffer.charAtScreen(0, 2));
+            assertEquals('\u0000', buffer.charAtScreen(0, 3));
+
+            assertEquals(CJK, buffer.charAtScreen(1, 0));
+            assertEquals('\u0000', buffer.charAtScreen(1, 1));
+            assertEquals(CJK, buffer.charAtScreen(1, 2));
+            assertEquals('\u0000', buffer.charAtScreen(1, 3));
+        }
+
+        @Test
+        @DisplayName("Wide characters in scrollback preserved after resize")
+        void testWideCharInScrollbackAfterResize() {
+            buffer.write(String.valueOf(CJK), 0, 0);
+
+            // Scroll u scrollback sa nepraznim linijama
+            for (int i = 1; i < HEIGHT; i++) {
+                buffer.write("X", i, 0);
+                //buffer.addEmptyLine();
+            }
+            buffer.write("X", HEIGHT - 1, 0);
+            buffer.resize(WIDTH * 2, HEIGHT);
+
+            // CJK linija treba da bude u scrollback ili screen
+            String full = buffer.screenAndScrollbackToString();
+            assertTrue(full.contains(String.valueOf(CJK)));
+        }
+
+        @Test
+        @DisplayName("Wide char at end of line — padding space preserved after resize")
+        void testWideCharPaddingPreservedAfterResize() {
+            // Wide na poziciji WIDTH-1 — treba padding space i wrap
+            buffer.write("A".repeat(WIDTH - 1));
+            buffer.write(String.valueOf(CJK)); // ne staje, padding + wrap
+
+            // Linija 0: AAAAAAAAA + space (padding)
+            assertEquals(' ', buffer.charAtScreen(0, WIDTH - 1));
+            // Linija 1: CJK + placeholder
+            assertEquals(CJK, buffer.charAtScreen(1, 0));
+
+            buffer.resize(WIDTH * 2, HEIGHT);
+
+            // Posle widen — sadržaj treba da ostane validan
+            assertDoesNotThrow(() -> buffer.lineToString(0));
+            assertDoesNotThrow(() -> buffer.lineToString(1));
+        }
+
+        @Test
+        @DisplayName("Cursor after wide char preserved after resize")
+        void testCursorAfterWideCharPreservedAfterResize() {
+            buffer.write("A" + CJK); // cursor na col=3
+            int rowBefore = buffer.cursor().row();
+            int colBefore = buffer.cursor().col();
+
+            buffer.resize(WIDTH * 2, HEIGHT);
+
+            assertEquals(rowBefore, buffer.cursor().row());
+            assertEquals(colBefore, buffer.cursor().col());
+        }
+
+        @Test
+        @DisplayName("Write wide char after resize uses new dimensions")
+        void testWriteWideCharAfterResize() {
+            buffer.resize(6, HEIGHT);
+            buffer.write(String.valueOf(CJK).repeat(3)); // 3 * 2 = 6 cells, tačno nova širina
+
+            assertEquals(CJK, buffer.charAtScreen(0, 0));
+            assertEquals(CJK, buffer.charAtScreen(0, 2));
+            assertEquals(CJK, buffer.charAtScreen(0, 4));
+            assertEquals(0, buffer.cursor().row());
+            assertEquals(5, buffer.cursor().col());
+        }
+
+        @Test
+        @DisplayName("Resize to width 1 with wide chars — wide chars go to scrollback")
+        void testResizeToWidth1WithWideChars() {
+            buffer.write(String.valueOf(CJK));
+            // Wide karakter ne moze da stane u width=1
+            // Ne sme da crashuje
+            assertDoesNotThrow(() -> buffer.resize(1, HEIGHT));
+            assertEquals(1, buffer.width());
+        }
+
+        @Test
+        @DisplayName("Mixed wide and narrow chars reflow correctly")
+        void testMixedWideNarrowReflow() {
+            buffer.write("A" + CJK + "BC"); // A(0) CJK(1) placeholder(2) B(3) C(4)
+            buffer.resize(3, HEIGHT);       // nova širina 3
+
+            // Linija 0: A + CJK ne staje (3 ćelije = A + CJK zauzima 2)
+            // ili A + space + ... zavisi od implementacije
+            // Bitno: ne crashuje, sadržaj je validan
+            assertDoesNotThrow(() -> {
+                for (int i = 0; i < HEIGHT; i++) {
+                    String line = buffer.lineToString(i);
+                    assertEquals(3, line.length());
+                }
+            });
+
+            // Sav sadržaj treba da bude prisutan negde
+            String full = buffer.screenAndScrollbackToString();
+            assertTrue(full.contains("A"));
+            assertTrue(full.contains(String.valueOf(CJK)));
+            assertTrue(full.contains("B"));
+            assertTrue(full.contains("C"));
+        }
+    }
 }

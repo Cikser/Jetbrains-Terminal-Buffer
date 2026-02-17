@@ -50,15 +50,15 @@ public class Cursor {
         }
     }
 
-    boolean resolveWrap(){
+    void resolveWrap(){
         if(!pendingWrap)
-            return false;
+            return;
         if(row == owner.height() - 1){
             owner.scroll();
         }
         down(1);
         set(row, 0);
-        return true;
+        owner.setWrapped(row);
     }
 
     void advanceDown() {

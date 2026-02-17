@@ -2,10 +2,7 @@ package terminalbuffer;
 
 import terminalbuffer.queue.BoundedQueue;
 
-import java.util.ArrayDeque;
-import java.util.Arrays;
-import java.util.Deque;
-import java.util.EnumSet;
+import java.util.*;
 
 public class TerminalBuffer {
     private int width, height;
@@ -14,6 +11,10 @@ public class TerminalBuffer {
     private final BoundedQueue<Line> scrollback;
     private final BoundedQueue<Line> screen;
     private Cursor cursor;
+
+    void setWrapped(int i){
+        screen.get(i).setWrapped(true);
+    }
 
     public TerminalBuffer(int width, int height, int maxScrollback){
         this.width = width;
@@ -259,13 +260,98 @@ public class TerminalBuffer {
         return scrollback.size();
     }
 
+
+    record StyledChar(char c, int attr, boolean empty) {}
+
+    public void resize(int newWidth, int newHeight) {
+        List<Line> allPhysicalLines = new ArrayList<>();
+        for (int i = 0; i < scrollback.size(); i++) allPhysicalLines.add(scrollback.get(i));
+        for (int i = 0; i < screen.size(); i++) {
+            if(!screen.get(i).empty())
+                allPhysicalLines.add(screen.get(i));
+        }
+
+        List<List<StyledChar>> logicalBlocks = new ArrayList<>();
+        List<StyledChar> currentBlock = new ArrayList<>();
+
+        for (Line line : allPhysicalLines) {
+            if (!line.isWrapped() && !currentBlock.isEmpty()) {
+                logicalBlocks.add(new ArrayList<>(currentBlock));
+                currentBlock.clear();
+            }
+
+            for (int col = 0; col < this.width; col++) {
+                currentBlock.add(new StyledChar(line.getChar(col), line.getAttributes(col), line.isEmpty(col)));
+            }
+        }
+        if (!currentBlock.isEmpty()) logicalBlocks.add(currentBlock);
+
+        this.width = newWidth;
+        this.height = newHeight;
+
+        List<Line> newPhysicalLines = new ArrayList<>();
+        for (List<StyledChar> block : logicalBlocks) {
+            trimTrailingSpaces(block);
+
+            for (int i = 0; i < block.size(); i += newWidth) {
+                Line newLine = new Line(width, currentAttributes);
+                if (i > 0) newLine.setWrapped(true);
+
+                for (int j = 0; j < newWidth && (i + j) < block.size(); j++) {
+                    StyledChar sc = block.get(i + j);
+                    newLine.set(j, sc.c(), sc.attr());
+                }
+                newPhysicalLines.add(newLine);
+            }
+            if (block.isEmpty()) {
+                newPhysicalLines.add(new Line(width, currentAttributes));
+            }
+        }
+
+        rebuildBuffers(newPhysicalLines, newHeight);
+
+        cursor.set(0, 0);
+    }
+
+    private void trimTrailingSpaces(List<StyledChar> block) {
+        int lastNonSpace = -1;
+        for (int i = 0; i < block.size(); i++) {
+            if (block.get(i).c() != ' ') lastNonSpace = i;
+        }
+        if (lastNonSpace < block.size() - 1) {
+            block.subList(lastNonSpace + 1, block.size()).clear();
+        }
+    }
+
+    private void rebuildBuffers(List<Line> newLines, int newHeight) {
+        scrollback.clear();
+        screen.clear();
+
+        int totalNewLines = newLines.size();
+
+        int screenStart = Math.max(0, totalNewLines - newHeight);
+
+        for (int i = 0; i < screenStart; i++) {
+            moveToScrollBack(newLines.get(i));
+        }
+
+        for (int i = screenStart; i < totalNewLines; i++) {
+            screen.push(newLines.get(i));
+        }
+
+        while (screen.size() < newHeight) {
+            screen.push(new Line(width, currentAttributes));
+        }
+    }
+
     public static void main(String[] args){
-        TerminalBuffer buffer = new TerminalBuffer(5, 3, 100);
-        buffer.write("AAAAA");
-        buffer.cursor.set(0, 4);
-        buffer.insert("X");
-        buffer.insert("Z");
+        TerminalBuffer buffer = new TerminalBuffer(5, 6, 100);
+        buffer.write("AAAAAAAA\nAAA\nAAAAAAAA");
         System.out.println(buffer.screenToString());
-        System.out.println(buffer.cursor.row() + " " + buffer.cursor.col());
+        buffer.resize(4, buffer.height());
+        System.out.println(buffer.screenToString());
+        buffer.resize(5, buffer.height());
+        System.out.println(buffer.screenToString());
+
     }
 }

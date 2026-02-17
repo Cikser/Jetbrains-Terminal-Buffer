@@ -2,6 +2,8 @@ package terminalbuffer;
 
 import java.util.Arrays;
 
+
+
 class LineContent{
     char[] characters;
     int[] attributes;
@@ -13,6 +15,16 @@ public class Line {
     private int[] attributes;
     private boolean[] empty;
 
+    private boolean isWrapped; // TRUE ako je ovo Soft Wrap (nastavak prethodne linije)
+
+    public boolean isWrapped() {
+        return isWrapped;
+    }
+
+    public void setWrapped(boolean wrapped) {
+        isWrapped = wrapped;
+    }
+
     Line(int width, int currentAttributes){
         characters = new char[width];
         attributes = new int[width];
@@ -23,6 +35,8 @@ public class Line {
             attributes[i] = currentAttributes;
             empty[i] = true;
         }
+
+        isWrapped = false;
     }
 
     char getChar(int i){
@@ -37,6 +51,12 @@ public class Line {
         this.characters[i] = character;
         this.attributes[i] = attributes;
         this.empty[i] = false;
+    }
+
+    void set(int i, char character, int attributes, boolean empty){
+        this.characters[i] = character;
+        this.attributes[i] = attributes;
+        this.empty[i] = empty;
     }
 
     @Override
@@ -107,6 +127,10 @@ public class Line {
             if (!isEmpty) return false;
         }
         return true;
+    }
+
+    boolean isEmpty(int i){
+        return empty[i];
     }
 
 }

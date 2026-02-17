@@ -15,7 +15,7 @@ public class Cursor {
     public void set(int row, int col){
         this.row = Math.max(0, Math.min(owner.height() - 1, row));
         this.col = Math.max(0, Math.min(owner.width() - 1, col));
-        pendingWrap = false;
+        pendingWrap = col == owner.width();
     }
 
     public int row(){

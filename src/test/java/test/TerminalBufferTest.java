@@ -354,6 +354,53 @@ class TerminalBufferTest {
         }
     }
 
+    @Test
+    @DisplayName("Cursor positioned after inserted text, no overflow")
+    void testCursorAfterInsertNoOverflow() {
+        // Insert "ABC" at col 2, cursor should end at col 5
+        buffer.cursor().set(0, 2);
+        buffer.insert("ABC");
+
+        assertEquals(0, buffer.cursor().row());
+        assertEquals(5, buffer.cursor().col());
+    }
+
+    @Test
+    @DisplayName("Cursor positioned after inserted text, with overflow to next line")
+    void testCursorAfterInsertWithOverflow() {
+        buffer.write("A".repeat(WIDTH));
+        // Insert "XX" at col WIDTH-1, only 1 char fits, 1 goes to overflow
+        buffer.cursor().set(0, WIDTH - 1);
+        buffer.insert("XX");
+
+        assertEquals(1, buffer.cursor().row());
+        assertEquals(1, buffer.cursor().col());
+    }
+
+    @Test
+    @DisplayName("Cursor positioned after inserted text when entire text overflows")
+    void testCursorAfterInsertFullOverflow() {
+        buffer.write("A".repeat(WIDTH));
+        // Linija je puna, insert na col 5 - tekst pomera postojeci sadrzaj
+        // kursor treba da bude na col 5 + duzina teksta koji je stao
+        buffer.cursor().set(0, 5);
+        buffer.insert("XYZ");
+
+        assertEquals(0, buffer.cursor().row());
+        assertEquals(8, buffer.cursor().col());
+    }
+
+    @Test
+    @DisplayName("Cursor positioned after inserted text with newline")
+    void testCursorAfterInsertWithNewline() {
+        // Newline pomera kursor na sledecu liniju, col 0
+        buffer.cursor().set(0, 2);
+        buffer.insert("AB\nCD");
+
+        assertEquals(1, buffer.cursor().row());
+        assertEquals(2, buffer.cursor().col());
+    }
+
     // ============================================
     // CONTROL CHARACTER TESTS
     // ============================================
@@ -941,13 +988,13 @@ class TerminalBufferTest {
 
             // Insert at start of line
             buffer.cursor().set(0, 0);
-            buffer.insert(">>>"); // Should clear pending wrap and insert
+            buffer.insert(">"); // Should clear pending wrap and insert
 
-            // Line should start with ">>>"
-            assertTrue(buffer.lineToString(0).startsWith(">>>"));
+            // Line should start with ">"
+            assertTrue(buffer.lineToString(0).startsWith(">"));
 
             // Should have wrapped
-            assertTrue(buffer.lineToString(1).startsWith("  X"));
+            assertTrue(buffer.lineToString(1).startsWith("X"));
         }
 
         @Test

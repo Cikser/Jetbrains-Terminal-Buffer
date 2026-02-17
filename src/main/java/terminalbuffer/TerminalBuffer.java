@@ -154,13 +154,6 @@ public class TerminalBuffer {
         while (i < text.length()){
             int controlChar = findControl(lastControl, text);
 
-            if(controlChar < text.length()){
-                cursor.handleChar(text.charAt(controlChar));
-                lastControl = controlChar;
-                i = controlChar + 1;
-                continue;
-            }
-
             Line line = screen.get(cursor.row());
             LineContent lc = line.insertAndOverflow(cursor.col(), text, attributes, lastControl + 1, controlChar);
             int shift = calcCursorShift(lc, lastControl + 1, controlChar);
@@ -168,6 +161,10 @@ public class TerminalBuffer {
             cursor.resolveWrap();
             cursor.advance();
             if(lc != null) insertQueue.push(lc);
+            if(controlChar < text.length()){
+                cursor.handleChar(text.charAt(controlChar));
+                lastControl = controlChar;
+            }
             i = controlChar + 1;
         }
     }
@@ -176,8 +173,7 @@ public class TerminalBuffer {
         int substringLen = textEndIndex - textStartIndex;
         if(lc != null)
             substringLen = width;
-        int shift = Math.min(width, substringLen - 1);
-        return shift;
+        return Math.min(width, substringLen - 1);
     }
 
     private int findControl(int lastControl, String text){
@@ -190,19 +186,51 @@ public class TerminalBuffer {
 
     public void insert(String text){
         cursor.resolveWrap();
-        int[] attributes = new int[text.length()];
-        Arrays.fill(attributes, currentAttributes);
+        int[] attributes = buildAttr(text.length());
         Deque<LineContent> insertQueue = new ArrayDeque<>();
+
+        int[] finalPos = calcFinalCursorPos(text, cursor.row(), cursor.col());
+
         insertAndOverflow(text, attributes, insertQueue);
         while (!insertQueue.isEmpty()){
             LineContent lc = insertQueue.pop();
             insertAndOverflow(new String(lc.characters), lc.attributes, insertQueue);
         }
+
+        cursor.set(finalPos[0], finalPos[1]);
+    }
+
+    private int[] calcFinalCursorPos(String text, int startRow, int startCol) {
+        int row = startRow;
+        int col = startCol;
+
+        for (char c : text.toCharArray()) {
+            if (c == '\n') {
+                row = Math.min(row + 1, height - 1);
+                col = 0;
+            } else if (c == '\r') {
+                col = 0;
+            } else {
+                if(col == width) {
+                    col = 0;
+                    row = Math.min(row + 1, height - 1);
+                }
+                col++;
+            }
+        }
+
+        return new int[]{row, col};
     }
 
     public void insert(String text, int row, int col){
         cursor.set(row, col);
         insert(text);
+    }
+
+    private int[] buildAttr(int length){
+        int[] attr = new int[length];
+        Arrays.fill(attr, currentAttributes);
+        return attr;
     }
 
     public char getChar(int i, int j){
@@ -224,22 +252,6 @@ public class TerminalBuffer {
             return screen.get(i).toString();
         }
         return scrollback.get(scrollback.size() + i).toString();
-    }
-
-
-    void print(){
-        for(int i = 0; i < screen.size(); i++) {
-            System.out.println(screen.get(i).toString());
-        }
-    }
-
-
-    public static void main(String[] args){
-        TerminalBuffer buffer = new TerminalBuffer(3, 2, 10);
-        String longText = "A".repeat(3 * 2 * 2);
-        buffer.write(longText);
-        buffer.insert("ff", 0, 0);
-        buffer.print();
     }
 
     public int scrollbackSize() {

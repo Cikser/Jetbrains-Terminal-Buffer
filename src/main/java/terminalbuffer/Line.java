@@ -92,8 +92,8 @@ public class Line {
             System.arraycopy(characters, lineStartIndex, characters, lineStartIndex + textLen, copiedSize);
             System.arraycopy(attributes, lineStartIndex, attributes, lineStartIndex + textLen, copiedSize);
         }
-        System.arraycopy(text.toCharArray(), textStartIndex, characters, lineStartIndex, textOverflowStart);
-        System.arraycopy(attr, textStartIndex, attributes, lineStartIndex, textOverflowStart);
+        System.arraycopy(text.toCharArray(), textStartIndex, characters, lineStartIndex, textOverflowStart - textStartIndex);
+        System.arraycopy(attr, textStartIndex, attributes, lineStartIndex, textOverflowStart - textStartIndex);
     }
 
     boolean empty(){

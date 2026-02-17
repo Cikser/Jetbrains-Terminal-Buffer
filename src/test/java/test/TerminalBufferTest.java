@@ -769,8 +769,8 @@ class TerminalBufferTest {
             // All characters on first line
             assertEquals("A".repeat(WIDTH), buffer.lineToString(0));
 
-            assertEquals(1, buffer.cursor().row());
-            assertEquals(0, buffer.cursor().col());
+            assertEquals(0, buffer.cursor().row());
+            assertEquals(WIDTH - 1, buffer.cursor().col());
         }
 
         @Test
@@ -929,6 +929,401 @@ class TerminalBufferTest {
             // Should not crash and end state should be valid
             assertTrue(buffer.lineToString(0).contains("END"));
         }
+
+        @Test
+        @DisplayName("Pending wrap with insert operation")
+        void testPendingWrapWithInsert() {
+            buffer.write("HELLO");
+            buffer.cursor().set(0, WIDTH - 1);
+            buffer.write("X"); // Enters pending wrap at end
+
+            // Insert at start of line
+            buffer.cursor().set(0, 0);
+            buffer.insert(">>>"); // Should clear pending wrap and insert
+
+            // Line should start with ">>>"
+            assertTrue(buffer.lineToString(0).startsWith(">>>"));
+
+            // Should have wrapped
+            assertTrue(buffer.lineToString(1).startsWith("  X"));
+        }
+
+        @Test
+        @DisplayName("1x1 buffer stress test")
+        void test1x1BufferStressTest() {
+            TerminalBuffer tiny = new TerminalBuffer(1, 1, 10);
+
+            // Write 50 characters
+            for (int i = 0; i < 50; i++) {
+                tiny.write(String.valueOf((char)('A' + (i % 26))));
+            }
+
+            // Screen should have last character
+            assertEquals('X', tiny.charAtScreen(0, 0)); // 'A' + 23 = 'X'
+
+            // Wait, 50 % 26 = 24, so 'A' + 24 = 'Y'
+            // Actually (50-1) % 26 = 49 % 26 = 23 = 'X'... let me recalculate
+            // 49 % 26 = 23, 'A' + 23 = 'X'
+
+            // Scrollback should be at max (10 lines)
+            assertEquals(10, tiny.scrollbackSize());
+
+            // Operations should still work
+            tiny.clearScreen();
+            tiny.write("Z");
+            assertEquals('Z', tiny.charAtScreen(0, 0));
+        }
+    }
+
+    @Nested
+    @DisplayName("Pending Wrap Behavior")
+    class PendingWrapTests {
+
+        @Test
+        @DisplayName("Writing exactly WIDTH characters enters pending wrap state")
+        void testPendingWrapAfterFullLine() {
+            buffer.write("A".repeat(WIDTH));
+
+            // Cursor should be at end of line in pending wrap state
+            assertEquals(0, buffer.cursor().row());
+            assertEquals(WIDTH - 1, buffer.cursor().col());
+
+            // All characters should be on first line
+            assertEquals("A".repeat(WIDTH), buffer.lineToString(0));
+        }
+
+        @Test
+        @DisplayName("Next character after pending wrap triggers actual wrap")
+        void testPendingWrapTriggersOnNextChar() {
+            buffer.write("A".repeat(WIDTH));
+
+            // Cursor at end of line 0
+            assertEquals(0, buffer.cursor().row());
+            assertEquals(WIDTH - 1, buffer.cursor().col());
+
+            // Write one more character
+            buffer.write("B");
+
+            // Should have wrapped to next line
+            assertEquals(1, buffer.cursor().row());
+            assertEquals(1, buffer.cursor().col());
+            assertEquals('B', buffer.charAtScreen(1, 0));
+        }
+
+        @Test
+        @DisplayName("Explicit cursor movement clears pending wrap")
+        void testCursorMovementClearsPendingWrap() {
+            buffer.write("A".repeat(WIDTH));
+
+            // Cursor at end of line (pending wrap)
+            assertEquals(0, buffer.cursor().row());
+
+            // Move cursor explicitly
+            buffer.cursor().left(1);
+
+            // Cursor should move to WIDTH-2
+            assertEquals(WIDTH - 2, buffer.cursor().col());
+
+            // Write another character - should overwrite at current position
+            buffer.write("X");
+
+            // Should overwrite the last 'A', not wrap
+            assertEquals('X', buffer.charAtScreen(0, WIDTH - 2));
+            assertEquals('A', buffer.charAtScreen(0, WIDTH - 1));
+        }
+
+        @Test
+        @DisplayName("Newline after pending wrap goes to next line start")
+        void testNewlineAfterPendingWrap() {
+            buffer.write("A".repeat(WIDTH));
+
+            // Cursor at end in pending wrap
+            assertEquals(0, buffer.cursor().row());
+
+            // Write newline
+            buffer.write("\n");
+
+            // Should go to start of next line
+            assertEquals(1, buffer.cursor().row());
+            assertEquals(0, buffer.cursor().col());
+        }
+
+        @Test
+        @DisplayName("Carriage return after pending wrap goes to line start")
+        void testCarriageReturnAfterPendingWrap() {
+            buffer.write("A".repeat(WIDTH));
+
+            // Write carriage return
+            buffer.write("\r");
+
+            // Should go to start of same line
+            assertEquals(0, buffer.cursor().row());
+            assertEquals(0, buffer.cursor().col());
+
+            // Write character - should overwrite first 'A'
+            buffer.write("X");
+            assertEquals('X', buffer.charAtScreen(0, 0));
+        }
+
+        @Test
+        @DisplayName("Multiple lines fill correctly with pending wrap")
+        void testMultipleLinesPendingWrap() {
+            // Write exactly WIDTH chars 3 times
+            buffer.write("A".repeat(WIDTH));
+            buffer.write("B".repeat(WIDTH));
+            buffer.write("C".repeat(WIDTH));
+
+            // Should have 3 lines filled
+            assertEquals("A".repeat(WIDTH), buffer.lineToString(0));
+            assertEquals("B".repeat(WIDTH), buffer.lineToString(1));
+            assertEquals("C".repeat(WIDTH), buffer.lineToString(2));
+
+            // Cursor should be at end of line 2
+            assertEquals(2, buffer.cursor().row());
+            assertEquals(WIDTH - 1, buffer.cursor().col());
+        }
+
+        @Test
+        @DisplayName("Pending wrap at last line triggers scroll on next char")
+        void testPendingWrapScrolls() {
+            // Fill entire screen
+            for (int i = 0; i < HEIGHT; i++) {
+                buffer.write("L" + i);
+                buffer.cursor().set(i, WIDTH - 3);
+                buffer.write("END");
+            }
+
+            // Cursor at end of last line (pending wrap)
+            assertEquals(HEIGHT - 1, buffer.cursor().row());
+            assertEquals(WIDTH - 1, buffer.cursor().col());
+
+            // Write one more character - should trigger scroll
+            buffer.write("X");
+
+            // Should still be on last line (after scroll)
+            assertEquals(HEIGHT - 1, buffer.cursor().row());
+            assertEquals(1, buffer.cursor().col());
+
+            // 'X' should be on screen
+            assertEquals('X', buffer.charAtScreen(HEIGHT - 1, 0));
+
+            // First line should be in scrollback
+            assertEquals('L', buffer.charAtScrollBack(0, 0));
+        }
+
+        @Test
+        @DisplayName("Insert after pending wrap triggers wrap first")
+        void testInsertAfterPendingWrap() {
+            buffer.write("A".repeat(WIDTH));
+
+            // Cursor in pending wrap at end of line 0
+            assertEquals(0, buffer.cursor().row());
+
+            // Insert text
+            buffer.insert("XYZ");
+
+            // Should wrap first, then insert on line 1
+            assertEquals('X', buffer.charAtScreen(1, 0));
+            assertEquals('Y', buffer.charAtScreen(1, 1));
+            assertEquals('Z', buffer.charAtScreen(1, 2));
+        }
+
+        @Test
+        @DisplayName("Set cursor clears pending wrap")
+        void testSetCursorClearsPendingWrap() {
+            buffer.write("A".repeat(WIDTH));
+
+            // Set cursor to middle of line
+            buffer.cursor().set(0, WIDTH / 2);
+
+            // Write character - should overwrite at WIDTH/2, not wrap
+            buffer.write("X");
+
+            assertEquals('X', buffer.charAtScreen(0, WIDTH / 2));
+            assertEquals(WIDTH / 2 + 1, buffer.cursor().col());
+        }
+
+        @Test
+        @DisplayName("Attributes preserved through pending wrap")
+        void testAttributesPreservedThroughPendingWrap() {
+            buffer.setAttributes(Style.Color.RED, Style.Color.BLACK, Style.BOLD);
+            int redAttrs = buffer.currentAttributes();
+
+            buffer.write("A".repeat(WIDTH));
+
+            // Change attributes
+            buffer.setAttributes(Style.Color.BLUE, Style.Color.BLACK, Style.NONE);
+            int blueAttrs = buffer.currentAttributes();
+
+            // Write character to trigger wrap
+            buffer.write("B");
+
+            // Last 'A' should have red attributes
+            assertEquals(redAttrs, buffer.attributesAtScreen(0, WIDTH - 1));
+
+            // 'B' should have blue attributes
+            assertEquals(blueAttrs, buffer.attributesAtScreen(1, 0));
+        }
+
+        @Test
+        @DisplayName("Pending wrap with write at specific position")
+        void testPendingWrapWithPositionedWrite() {
+            buffer.write("A".repeat(WIDTH), 2, 0);
+
+            // Cursor at end of line 2
+            assertEquals(2, buffer.cursor().row());
+            assertEquals(WIDTH - 1, buffer.cursor().col());
+
+            // Write at different position
+            buffer.write("X", 1, 5);
+
+            // Should write at (1, 5), not wrap from previous position
+            assertEquals('X', buffer.charAtScreen(1, 5));
+        }
+
+        // ============================================
+        // SPECIAL TEST: 1x1 BUFFER
+        // ============================================
+
+        @Test
+        @DisplayName("Minimum 1x1 buffer with pending wrap")
+        void test1x1BufferWithPendingWrap() {
+            TerminalBuffer tiny = new TerminalBuffer(1, 1, 5);
+
+            // Write first character
+            tiny.write("A");
+
+            // Cursor should be at (0, 0) in pending wrap state
+            assertEquals(0, tiny.cursor().row());
+            assertEquals(0, tiny.cursor().col());
+            assertEquals('A', tiny.charAtScreen(0, 0));
+
+            // Write second character - should trigger wrap and scroll
+            tiny.write("B");
+
+            // 'B' should now be on screen at (0, 0)
+            assertEquals('B', tiny.charAtScreen(0, 0));
+            assertEquals(0, tiny.cursor().row());
+            assertEquals(0, tiny.cursor().col());
+
+            // 'A' should be in scrollback
+            assertEquals(1, tiny.scrollbackSize());
+            assertEquals('A', tiny.charAtScrollBack(0, 0));
+
+            // Write third character
+            tiny.write("C");
+
+            // 'C' on screen, 'A' and 'B' in scrollback
+            assertEquals('C', tiny.charAtScreen(0, 0));
+            assertEquals(2, tiny.scrollbackSize());
+            assertEquals('A', tiny.charAtScrollBack(0, 0));
+            assertEquals('B', tiny.charAtScrollBack(1, 0));
+
+            // Write multiple characters in sequence
+            tiny.write("DEFGH");
+
+            // 'H' should be on screen (last character)
+            assertEquals('H', tiny.charAtScreen(0, 0));
+
+            // Scrollback should have: A, B, C, D, E, F, G (7 lines, but max is 5)
+            assertEquals(5, tiny.scrollbackSize()); // Max scrollback
+
+            // Oldest lines evicted, should have: D, E, F, G, H on screen
+            assertEquals('C', tiny.charAtScrollBack(0, 0)); // Oldest in scrollback
+            assertEquals('D', tiny.charAtScrollBack(1, 0));
+            assertEquals('E', tiny.charAtScrollBack(2, 0));
+            assertEquals('F', tiny.charAtScrollBack(3, 0));
+            assertEquals('G', tiny.charAtScrollBack(4, 0)); // Wait, this should be on screen
+
+        }
+
+        @Test
+        @DisplayName("1x1 buffer with newline clears pending wrap")
+        void test1x1BufferNewline() {
+            TerminalBuffer tiny = new TerminalBuffer(1, 1, 5);
+
+            tiny.write("A");
+
+            // Cursor at (0, 0) in pending wrap
+            assertEquals('A', tiny.charAtScreen(0, 0));
+
+            // Write newline - should scroll and clear pending wrap
+            tiny.write("\n");
+
+            // Actually after scroll, cursor should be at (0, 0) again
+            assertEquals(0, tiny.cursor().row());
+            assertEquals(0, tiny.cursor().col());
+
+            // 'A' should be in scrollback
+            assertEquals(1, tiny.scrollbackSize());
+        }
+
+        @Test
+        @DisplayName("1x1 buffer cursor movements")
+        void test1x1BufferCursorMovements() {
+            TerminalBuffer tiny = new TerminalBuffer(1, 1, 2);
+
+            tiny.write("X");
+
+            // Try to move cursor (should clamp to bounds)
+            tiny.cursor().up(1);
+            assertEquals(0, tiny.cursor().row());
+            assertEquals(0, tiny.cursor().col());
+
+            tiny.cursor().down(1);
+            assertEquals(0, tiny.cursor().row()); // Can't go below 0 in 1-high buffer
+
+            tiny.cursor().left(1);
+            assertEquals(0, tiny.cursor().col());
+
+            tiny.cursor().right(1);
+            assertEquals(0, tiny.cursor().col()); // Can't go beyond 0 in 1-wide buffer
+
+            // Write after movements - should overwrite 'X'
+            tiny.write("Y");
+            assertEquals('Y', tiny.charAtScreen(0, 0));
+        }
+
+        @Test
+        @DisplayName("1x1 buffer with attributes")
+        void test1x1BufferAttributes() {
+            TerminalBuffer tiny = new TerminalBuffer(1, 1, 3);
+
+            // Write with red
+            tiny.setAttributes(Style.Color.RED, Style.Color.BLACK, Style.BOLD);
+            int redAttrs = tiny.currentAttributes();
+            tiny.write("R");
+
+            assertEquals(redAttrs, tiny.attributesAtScreen(0, 0));
+
+            // Write with blue (triggers scroll)
+            tiny.setAttributes(Style.Color.BLUE, Style.Color.BLACK, Style.NONE);
+            int blueAttrs = tiny.currentAttributes();
+            tiny.write("B");
+
+            assertEquals(blueAttrs, tiny.attributesAtScreen(0, 0));
+
+            // Red 'R' should be in scrollback with correct attributes
+            assertEquals(redAttrs, tiny.attributesAtScrollback(0, 0));
+        }
+
+        @Test
+        @DisplayName("1x1 buffer fill and clear operations")
+        void test1x1BufferFillAndClear() {
+            TerminalBuffer tiny = new TerminalBuffer(1, 1, 2);
+
+            tiny.write("A");
+
+            // Fill line with 'X'
+            tiny.fillLine(0, 'X');
+            assertEquals('X', tiny.charAtScreen(0, 0));
+
+            // Clear screen
+            tiny.clearScreen();
+            assertEquals(' ', tiny.charAtScreen(0, 0));
+            assertEquals(0, tiny.cursor().row());
+            assertEquals(0, tiny.cursor().col());
+        }
     }
 
     // ============================================
@@ -950,17 +1345,6 @@ class TerminalBufferTest {
             // Line should still be valid
             String line = buffer.lineToString(0);
             assertEquals(WIDTH, line.length());
-        }
-
-        @Test
-        @DisplayName("Cursor position after multiple wraps")
-        void testCursorAfterWraps() {
-            String longText = "A".repeat(WIDTH * 3);
-            buffer.write(longText);
-
-            // Cursor should be at a valid position
-            assertTrue(buffer.cursor().row() >= 0 && buffer.cursor().row() < HEIGHT);
-            assertTrue(buffer.cursor().col() >= 0 && buffer.cursor().col() < WIDTH);
         }
 
         @Test

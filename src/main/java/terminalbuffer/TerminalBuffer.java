@@ -57,6 +57,7 @@ public class TerminalBuffer {
                 cursor.handleChar(c);
                 continue;
             }
+            cursor.resolveWrap();
             screen.get(cursor.row()).set(cursor.col(), c, currentAttributes);
             cursor.advance();
         }
@@ -145,6 +146,7 @@ public class TerminalBuffer {
     private final Deque<LineContent> insertQueue = new ArrayDeque<>();
 
     private void insertAndOverflow(String text, int[] attributes){
+        cursor.resolveWrap();
         int i = 0;
         int lastControl = -1;
         while (i < text.length()){
@@ -161,6 +163,7 @@ public class TerminalBuffer {
             LineContent lc = line.insertAndOverflow(cursor.col(), text, attributes, lastControl + 1, controlChar);
             int shift = calcCursorShift(lc, lastControl + 1, controlChar);
             cursor.right(shift);
+            cursor.resolveWrap();
             cursor.advance();
             if(lc != null) insertQueue.push(lc);
             i = controlChar + 1;
@@ -184,6 +187,9 @@ public class TerminalBuffer {
     }
 
     public void insert(String text){
+        cursor.resolveWrap();
+        int row = cursor.row();
+        int col = cursor.col();
         int[] attributes = new int[text.length()];
         Arrays.fill(attributes, currentAttributes);
         insertAndOverflow(text, attributes);
@@ -194,6 +200,11 @@ public class TerminalBuffer {
             text = new String(lc.characters);
             attributes = lc.attributes;
             insertAndOverflow(text, attributes);
+        }
+        cursor.set(row, col);
+        for (int i = 0; i < text.length(); i++){
+            cursor.resolveWrap();
+            cursor.advance();
         }
     }
 
@@ -209,4 +220,14 @@ public class TerminalBuffer {
     }
 
 
+    public static void main(String[] args){
+        TerminalBuffer buffer = new TerminalBuffer(3, 2, 10);
+        String longText = "A".repeat(3 * 2 * 2);
+        buffer.write(longText);
+        buffer.print();
+    }
+
+    public int scrollbackSize() {
+        return scrollback.size();
+    }
 }

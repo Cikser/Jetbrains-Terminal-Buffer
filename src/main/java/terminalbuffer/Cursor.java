@@ -3,16 +3,19 @@ package terminalbuffer;
 public class Cursor {
     private int row, col;
     private final TerminalBuffer owner;
+    private boolean pendingWrap;
 
     Cursor(TerminalBuffer owner){
         this.owner = owner;
         row = 0;
         col = 0;
+        pendingWrap = false;
     }
 
     public void set(int row, int col){
         this.row = Math.max(0, Math.min(owner.height() - 1, row));
         this.col = Math.max(0, Math.min(owner.width() - 1, col));
+        pendingWrap = false;
     }
 
     public int row(){
@@ -42,18 +45,24 @@ public class Cursor {
     void advance(){
         if(col != owner.width() - 1)
             right(1);
-        else if(row != owner.height() - 1){
-            set(row, 0);
-            down(1);
-        }
-        else{
-            owner.scroll();
-            set(row, 0);
+        else {
+            pendingWrap = true;
         }
     }
 
+    boolean resolveWrap(){
+        if(!pendingWrap)
+            return false;
+        if(row == owner.height() - 1){
+            owner.scroll();
+        }
+        down(1);
+        set(row, 0);
+        return true;
+    }
+
     void advanceDown() {
-        if(row == owner.height() - 1)
+        if(row >= owner.height() - 1)
             owner.scroll();
         down(1);
     }
@@ -62,11 +71,11 @@ public class Cursor {
         switch (c){
             case '\n':{
                 advanceDown();
-                left(owner.width());
+                set(row, 0);
                 break;
             }
             case '\r':{
-                left(owner.width());
+                set(row, 0);
                 break;
             }
             default: break;

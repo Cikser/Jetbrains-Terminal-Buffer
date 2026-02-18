@@ -349,7 +349,7 @@ public class TerminalBuffer {
 
 
     private ReflowResult performFastReflow(List<Line> allLines, int newWidth, CursorAnchor anchor) {
-        List<Line> newLines = new ArrayList<>(allLines.size());
+        List<Line> newLines = new ArrayList<>();
         int resRow = -1, resCol = -1;
         int currentBlockIdx = 0;
 
@@ -362,22 +362,26 @@ public class TerminalBuffer {
             }
 
             int effectiveLen = calculateEffectiveLength(allLines, start, end);
-
             int logicSize = (currentBlockIdx == anchor.blockIndex)
                     ? Math.max(effectiveLen, anchor.offset + 1)
                     : effectiveLen;
 
-            for (int offset = 0; offset < logicSize || (logicSize == 0 && offset == 0); offset += newWidth) {
+            int offset = 0;
+            while (offset < logicSize || (logicSize == 0 && offset == 0)) {
                 Line newLine = new Line(newWidth, currentAttributes);
                 if (offset > 0) newLine.setWrapped();
 
-                if (currentBlockIdx == anchor.blockIndex && anchor.offset >= offset && anchor.offset < offset + newWidth) {
+                int consumed = copyFromOriginal(allLines, start, end, newLine, offset, newWidth);
+
+                if (currentBlockIdx == anchor.blockIndex && anchor.offset >= offset && anchor.offset < offset + consumed) {
                     resRow = newLines.size();
                     resCol = anchor.offset - offset;
                 }
 
-                copyFromOriginal(allLines, start, end, newLine, offset, newWidth);
                 newLines.add(newLine);
+                offset += consumed;
+
+                if (offset >= logicSize && currentBlockIdx != anchor.blockIndex) break;
             }
 
             currentBlockIdx++;
@@ -399,19 +403,37 @@ public class TerminalBuffer {
     }
 
 
-    private void copyFromOriginal(List<Line> allLines, int start, int end, Line target, int startOffset, int targetWidth) {
-        for (int j = 0; j < targetWidth; j++) {
-            int globalOffset = startOffset + j;
+    private int copyFromOriginal(List<Line> allLines, int start, int end, Line target, int startOffset, int targetWidth) {
+        int copiedInTarget = 0;
+        int consumedFromSource = 0;
+
+        while (copiedInTarget < targetWidth) {
+            int globalOffset = startOffset + consumedFromSource;
             int lineInBlock = globalOffset / this.width;
             int colInLine = globalOffset % this.width;
 
             if (start + lineInBlock <= end) {
                 Line source = allLines.get(start + lineInBlock);
-                target.set(j, source.getChar(colInLine), source.getAttributes(colInLine));
+                char c = source.getChar(colInLine);
+                int attr = source.getAttributes(colInLine);
+
+                if (WideCharUtil.isWide(c)) {
+                    if (copiedInTarget >= targetWidth - 1) {
+                        break;
+                    }
+                    target.setWide(copiedInTarget, c, attr);
+                    copiedInTarget += 2;
+                    consumedFromSource += 2;
+                } else {
+                    target.set(copiedInTarget, c, attr);
+                    copiedInTarget++;
+                    consumedFromSource++;
+                }
             } else {
                 break;
             }
         }
+        return consumedFromSource == 0 && targetWidth > 0 ? 1 : consumedFromSource;
     }
 
     private List<Line> collectLinesForReflow() {

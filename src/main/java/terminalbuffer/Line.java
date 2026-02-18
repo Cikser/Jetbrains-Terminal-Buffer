@@ -29,7 +29,7 @@ public class Line {
 
         for(int i = 0; i < width; i++){
             characters[i] = ' ';
-            attributes[i] = currentAttributes | Style.StyleFlag.EMPTY.value;
+            attributes[i] = currentAttributes | Style.EMPTY_BIT;
         }
 
         isWrapped = false;
@@ -45,7 +45,7 @@ public class Line {
 
     void set(int i, char character, int attributes){
         this.characters[i] = character;
-        this.attributes[i] = attributes & ~Style.StyleFlag.EMPTY.value;
+        this.attributes[i] = attributes & ~Style.EMPTY_BIT;
     }
 
     @Override
@@ -56,7 +56,7 @@ public class Line {
     void fill(char character, int attr){
         Arrays.fill(characters, character);
         if(character != ' '){
-            attr |= Style.StyleFlag.EMPTY.value;
+            attr |= Style.EMPTY_BIT;
         }
         Arrays.fill(attributes, attr);
     }
@@ -110,20 +110,20 @@ public class Line {
 
     boolean empty(){
         for (int attr : attributes) {
-            if ((attr & Style.StyleFlag.EMPTY.value) == 0) return false;
+            if ((attr & Style.EMPTY_BIT) == 0) return false;
         }
         return true;
     }
 
     boolean isEmpty(int i){
-        return (attributes[i] & Style.StyleFlag.EMPTY.value) != 0;
+        return (attributes[i] & Style.EMPTY_BIT) != 0;
     }
 
     public static final char WIDE_PLACEHOLDER = '\u0000';
 
     void setWide(int col, char character, int attributes) {
 
-        attributes &= ~Style.StyleFlag.EMPTY.value;
+        attributes &= ~Style.EMPTY_BIT;
 
         this.characters[col] = character;
         this.attributes[col] = attributes;

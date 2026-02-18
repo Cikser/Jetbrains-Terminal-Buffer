@@ -9,7 +9,7 @@ public class Style {
         BOLD(1),
         ITALIC(1 << 1),
         UNDERLINE(1 << 2),
-        EMPTY(1 << 24);
+        EMPTY(1 << 23);
 
         public final int value;
 
@@ -49,5 +49,7 @@ public class Style {
         attributes |= (style.value << 8);
         return attributes;
     }
+
+    static final int EMPTY_BIT = StyleFlag.EMPTY.value << 8;
 
 }

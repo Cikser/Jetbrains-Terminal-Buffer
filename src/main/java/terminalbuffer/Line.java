@@ -137,4 +137,8 @@ public class Line {
         this.attributes[col + 1] = attributes;
     }
 
+    public void writeBlock(int col, char[] sourceChars, int sourceStart, int len, int attr) {
+        System.arraycopy(sourceChars, sourceStart, this.characters, col, len);
+        Arrays.fill(this.attributes, col, col + len, attr);
+    }
 }

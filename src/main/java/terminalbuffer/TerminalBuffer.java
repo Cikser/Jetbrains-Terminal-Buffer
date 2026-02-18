@@ -57,30 +57,59 @@ public class TerminalBuffer {
     }
 
     public void write(String text) {
-        for (char c : text.toCharArray()) {
-            if (c == '\r' || c == '\n') {
-                cursor.handleChar(c);
-                continue;
-            }
-            cursor.resolveWrap();
+        char[] chars = text.toCharArray();
+        int i = 0;
 
-            boolean wide = WideCharUtil.isWide(c);
-
-            if(!wide){
-                screen.get(cursor.row()).set(cursor.col(), c, currentAttributes);
-                cursor.advance();
+        while (i < chars.length) {
+            if(chars[i] == Line.WIDE_PLACEHOLDER){
+                i++;
                 continue;
             }
 
-            if (cursor.col() == width - 1) {
-                cursor.advance();
-                cursor.resolveWrap();
+            int next = findControlOrWide(i, chars);
+
+            writeChunk(chars, i, next);
+
+            if (next < chars.length) {
+                char c = chars[next];
+                if (c == '\r' || c == '\n') {
+                    cursor.handleChar(c);
+                } else if (WideCharUtil.isWide(c)) {
+                    writeWideChar(c);
+                }
             }
-
-            screen.get(cursor.row()).setWide(cursor.col(), c, currentAttributes);
-            cursor.advanceForWideChar();
-
+            i = next + 1;
         }
+    }
+
+    private void writeChunk(char[] chars, int start, int end) {
+        if(end <= start) return;
+        int current = start;
+        while (current < end) {
+            cursor.resolveWrap();
+            Line line = screen.get(cursor.row());
+            int spaceInLine = width - cursor.col();
+            int toWrite = Math.min(spaceInLine, end - current);
+            if (toWrite <= 0) {
+                cursor.advance();
+                continue;
+            }
+            line.writeBlock(cursor.col(), chars, current, toWrite, currentAttributes);
+            cursor.right(toWrite - 1);
+            cursor.advance();
+            current += toWrite;
+        }
+    }
+
+    private void writeWideChar(char c) {
+        cursor.resolveWrap();
+        if (cursor.col() == width - 1) {
+            cursor.advance();
+            cursor.resolveWrap();
+        }
+        Line line = screen.get(cursor.row());
+        line.setWide(cursor.col(), c, currentAttributes);
+        cursor.advanceForWideChar();
     }
 
     public void write(String text, int row, int col){

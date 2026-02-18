@@ -98,7 +98,7 @@ public class Line {
         return lc;
     }
 
-    void shiftExistingContentAndInsertText(int copiedSize, char[] text, int[] attr, int lineStartIndex, int textStartIndex, int textLen, int textOverflowStart){
+    private void shiftExistingContentAndInsertText(int copiedSize, char[] text, int[] attr, int lineStartIndex, int textStartIndex, int textLen, int textOverflowStart){
         if(copiedSize > 0){
             System.arraycopy(characters, lineStartIndex, characters, lineStartIndex + textLen, copiedSize);
             System.arraycopy(attributes, lineStartIndex, attributes, lineStartIndex + textLen, copiedSize);
@@ -137,7 +137,7 @@ public class Line {
         this.attributes[col + 1] = attributes;
     }
 
-    public void writeBlock(int col, char[] sourceChars, int sourceStart, int len, int attr) {
+    void writeBlock(int col, char[] sourceChars, int sourceStart, int len, int attr) {
         System.arraycopy(sourceChars, sourceStart, this.characters, col, len);
         Arrays.fill(this.attributes, col, col + len, attr);
     }

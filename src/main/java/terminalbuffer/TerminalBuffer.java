@@ -4,6 +4,27 @@ import terminalbuffer.queue.BoundedQueue;
 
 import java.util.*;
 
+/**
+ * Terminal text buffer implementation with scrollback support, attribute handling,
+ * cursor management, wide character support, and dynamic resizing with content reflow.
+ *
+ * <p>This class provides the core data structure for terminal emulators, managing
+ * a fixed-height visible screen and a bounded scrollback buffer of historical lines.
+ *
+ * <p>Features:
+ * <ul>
+ *   <li>Write and insert operations with automatic line wrapping</li>
+ *   <li>16 foreground/background colors with bold, italic, underline styles</li>
+ *   <li>Cursor movement with VT100-style pending wrap semantics</li>
+ *   <li>Wide character support (CJK, emoji) occupying 2 cells</li>
+ *   <li>Dynamic resize with content reflow</li>
+ *   <li>Bounded scrollback with automatic eviction</li>
+ * </ul>
+ *
+ * @see Cursor
+ * @see Style
+ * @see Line
+ */
 public class TerminalBuffer {
     private int width, height;
     private final int maxScrollback;
@@ -12,10 +33,16 @@ public class TerminalBuffer {
     private final BoundedQueue<Line> screen;
     private Cursor cursor;
 
-    void setWrapped(int i){
-        screen.get(i).setWrapped();
-    }
-
+    /**
+     * Creates a new terminal buffer with specified dimensions.
+     *
+     * <p>The buffer is initialized with empty lines using default attributes
+     * The cursor starts at position (0, 0).
+     *
+     * @param width buffer width in characters (columns)
+     * @param height visible screen height in lines (rows)
+     * @param maxScrollback maximum number of scrollback lines to retain (0 to disable)
+     */
     public TerminalBuffer(int width, int height, int maxScrollback){
         this.width = width;
         this.height = height;
@@ -24,7 +51,7 @@ public class TerminalBuffer {
         screen = new BoundedQueue<>(height);
         scrollback = new BoundedQueue<>(maxScrollback);
 
-        currentAttributes = Style.setAttributes(Style.Color.WHITE, Style.Color.BLACK, Style.StyleFlag.NONE);
+        currentAttributes = Style.setAttributes(Style.Color.FG_DEFAULT, Style.Color.BG_DEFAULT, Style.StyleFlag.NONE);
         cursor = new Cursor(this);
 
         for (int i = 0; i < height; i++){
@@ -32,30 +59,97 @@ public class TerminalBuffer {
         }
     }
 
+    /**
+     * Returns the current buffer height (visible screen lines).
+     *
+     * @return height in lines
+     */
     public int height() {
         return height;
     }
 
+    /**
+     * Returns the current buffer width.
+     *
+     * @return width in characters
+     */
     public int width() {
         return width;
     }
 
+    /**
+     * Returns the current attribute settings as a bit-packed integer.
+     *
+     * <p>The returned value encodes foreground color, background color,
+     * and style flags (bold, italic, underline) used for subsequent write operations.
+     *
+     * @return bit-packed attribute value
+     * @see Style#setAttributes
+     */
     public int currentAttributes() {
         return currentAttributes;
     }
 
+    /**
+     * Sets the current text attributes with multiple style flags.
+     *
+     * <p>All subsequent write operations will use these attributes until changed.
+     *
+     * @param fg foreground color
+     * @param bg background color
+     * @param attributes set of style flags (bold, italic, underline)
+     * @see Style.Color
+     * @see Style.StyleFlag
+     */
     public void setAttributes(Style.Color fg, Style.Color bg, EnumSet<Style.StyleFlag> attributes){
         currentAttributes = Style.setAttributes(fg, bg, attributes);
     }
 
+    /**
+     * Sets the current text attributes with a single style flag.
+     *
+     * <p>All subsequent write operations will use these attributes until changed.
+     *
+     * @param fg foreground color
+     * @param bg background color
+     * @param attributes style flag (NONE, BOLD, ITALIC, or UNDERLINE)
+     * @see Style.Color
+     * @see Style.StyleFlag
+     */
     public void setAttributes(Style.Color fg, Style.Color bg, Style.StyleFlag attributes){
         currentAttributes = Style.setAttributes(fg, bg, attributes);
     }
 
+    /**
+     * Returns the cursor object for position management.
+     *
+     * <p>The cursor can be moved using methods like {@link Cursor#set},
+     * {@link Cursor#up}, {@link Cursor#down}, {@link Cursor#left}, {@link Cursor#right}.
+     *
+     * @return the cursor instance
+     */
     public Cursor cursor(){
         return cursor;
     }
 
+    /**
+     * Writes text at the current cursor position.
+     *
+     * <p>Text is written character-by-character, advancing the cursor after each character.
+     * Lines wrap automatically when reaching the right edge. Control characters
+     * (\n, \r) are handled appropriately. Wide characters (CJK, emoji) occupy 2 cells.
+     *
+     * <p>Behavior:
+     * <ul>
+     *   <li>Regular characters: written at cursor position, cursor advances by 1</li>
+     *   <li>Wide characters: occupy 2 cells, cursor advances by 2</li>
+     *   <li>\n: moves cursor to start of next line, scrolls if at bottom</li>
+     *   <li>\r: moves cursor to start of current line</li>
+     *   <li>Line wrap: when cursor reaches end, next character goes to next line</li>
+     * </ul>
+     *
+     * @param text text to write (may contain newlines, carriage returns, wide characters)
+     */
     public void write(String text) {
         char[] chars = text.toCharArray();
         int i = 0;
@@ -112,6 +206,16 @@ public class TerminalBuffer {
         cursor.advanceForWideChar();
     }
 
+    /**
+     * Writes text at a specific screen position.
+     *
+     * <p>This is equivalent to calling {@link Cursor#set} followed by {@link #write}.
+     * The cursor is moved to the specified position before writing begins.
+     *
+     * @param text text to write
+     * @param row target row (0-based, clamped to valid range)
+     * @param col target column (0-based, clamped to valid range)
+     */
     public void write(String text, int row, int col){
         cursor.set(row, col);
         write(text);
@@ -132,14 +236,36 @@ public class TerminalBuffer {
         screen.push(new Line(width, currentAttributes));
     }
 
+    /**
+     * Scrolls the screen up by one line.
+     *
+     * <p>The top line is moved to scrollback (if enabled), all lines shift up,
+     * and a new empty line is added at the bottom.
+     */
     public void addEmptyLine(){
         scroll();
+        cursor.set(cursor.row() - 1, cursor.col());
     }
 
+    /**
+     * Fills an entire line with a specific character using current attributes.
+     *
+     * <p>This overwrites all existing content on the line. The cursor position
+     * is not changed.
+     *
+     * @param i line index (0-based)
+     * @param character character to fill the line with
+     */
     public void fillLine(int i, char character){
         screen.get(i).fill(character, currentAttributes);
     }
 
+    /**
+     * Clears all content on the visible screen.
+     *
+     * <p>All screen lines are reset to empty (filled with spaces using current attributes).
+     * Scrollback is preserved. The cursor is moved to position (0, 0).
+     */
     public void clearScreen(){
         screen.clear();
         for(int i = 0; i < height; i++){
@@ -148,11 +274,23 @@ public class TerminalBuffer {
         cursor.set(0, 0);
     }
 
+    /**
+     * Clears both the screen and scrollback buffer.
+     *
+     * <p>All content is permanently erased. The cursor is moved to position (0, 0).
+     */
     public void clearScreenAndScrollback(){
         clearScreen();
         scrollback.clear();
     }
 
+    /**
+     * Returns the visible screen content as a string.
+     *
+     * <p>Each line is separated by a newline character. Trailing spaces are preserved.
+     *
+     * @return multi-line string representing screen content
+     */
     public String screenToString(){
         StringBuilder sb = new StringBuilder();
         for(int i = 0; i < screen.size(); i++){
@@ -162,6 +300,14 @@ public class TerminalBuffer {
         return sb.toString();
     }
 
+    /**
+     * Returns the combined scrollback and screen content as a string.
+     *
+     * <p>Scrollback lines appear first (oldest to newest), followed by screen lines.
+     * Each line is separated by a newline character.
+     *
+     * @return multi-line string representing all buffer content
+     */
     public String screenAndScrollbackToString(){
         StringBuilder sb = new StringBuilder();
         for(int i = 0; i < scrollback.size(); i++){
@@ -170,6 +316,10 @@ public class TerminalBuffer {
         }
         sb.append(screenToString());
         return sb.toString();
+    }
+
+    void setWrapped(int i){
+        screen.get(i).setWrapped();
     }
 
     private void insertAndOverflow(String text, int[] attributes, Deque<LineContent> insertQueue){
@@ -243,6 +393,19 @@ public class TerminalBuffer {
         return text.length;
     }
 
+    /**
+     * Inserts text at the current cursor position, shifting existing content right.
+     *
+     * <p>Unlike {@link #write}, insert does not overwrite existing content. Instead,
+     * characters to the right of the cursor are shifted to make room for the new text.
+     * Content that doesn't fit on the current line overflows to the next line, potentially
+     * cascading through multiple lines.
+     *
+     * <p>Wide characters and control characters are handled appropriately. The cursor
+     * is positioned at the end of the inserted text.
+     *
+     * @param text text to insert (may contain newlines, wide characters)
+     */
     public void insert(String text) {
         cursor.resolveWrap();
         Deque<LineContent> insertQueue = new ArrayDeque<>();
@@ -300,11 +463,36 @@ public class TerminalBuffer {
         return newCursor;
     }
 
+    /**
+     * Inserts text at a specific screen position.
+     *
+     * <p>This is equivalent to calling {@link Cursor#set} followed by {@link #insert}.
+     * The cursor is moved to the specified position before insertion begins.
+     *
+     * @param text text to insert
+     * @param row target row (0-based, clamped to valid range)
+     * @param col target column (0-based, clamped to valid range)
+     */
     public void insert(String text, int row, int col){
         cursor.set(row, col);
         insert(text);
     }
 
+    /**
+     * Retrieves a character at the specified position.
+     *
+     * <p>Supports unified access to both screen and scrollback using Python-style
+     * negative indexing:
+     * <ul>
+     *   <li>row &gt;= 0: access screen (row 0 = top visible line)</li>
+     *   <li>row &lt; 0: access scrollback (row -1 = most recent scrollback line)</li>
+     * </ul>
+     *
+     * @param i row index (0-based for screen, negative for scrollback)
+     * @param j column index (0-based)
+     * @return character at the specified position
+     * @throws IndexOutOfBoundsException if position is out of bounds
+     */
     public char getChar(int i, int j){
         if(i >= 0){
             return screen.get(i).getChar(j);
@@ -312,6 +500,19 @@ public class TerminalBuffer {
         return scrollback.get(scrollback.size() + i).getChar(j);
     }
 
+    /**
+     * Retrieves attributes at the specified position.
+     *
+     * <p>Returns the bit-packed attribute value encoding color and style information.
+     * Supports unified access to both screen and scrollback using negative indexing
+     * (see {@link #getChar} for details).
+     *
+     * @param i row index (0-based for screen, negative for scrollback)
+     * @param j column index (0-based)
+     * @return bit-packed attribute value
+     * @throws IndexOutOfBoundsException if position is out of bounds
+     * @see Style#setAttributes
+     */
     public int getAttributes(int i, int j){
         if(i >= 0){
             return screen.get(i).getAttributes(j);
@@ -319,6 +520,16 @@ public class TerminalBuffer {
         return scrollback.get(scrollback.size() + i).getAttributes(j);
     }
 
+    /**
+     * Retrieves an entire line as a string.
+     *
+     * <p>Supports unified access to both screen and scrollback using negative indexing
+     * (see {@link #getChar} for details). Trailing spaces are preserved.
+     *
+     * @param i line index (0-based for screen, negative for scrollback)
+     * @return line content as a string
+     * @throws IndexOutOfBoundsException if line index is out of bounds
+     */
     public String getLine(int i){
         if(i >= 0){
             return screen.get(i).toString();
@@ -326,10 +537,35 @@ public class TerminalBuffer {
         return scrollback.get(scrollback.size() + i).toString();
     }
 
+    /**
+     * Returns the current number of lines in scrollback.
+     *
+     * @return number of scrollback lines (0 to maxScrollback)
+     */
     public int scrollbackSize() {
         return scrollback.size();
     }
 
+    /**
+     * Resizes the terminal buffer, reflowing content to new dimensions.
+     *
+     * <p>Content is intelligently reflowed to fit the new width:
+     * <ul>
+     *   <li>Wider: wrapped lines may merge back into single lines</li>
+     *   <li>Narrower: long lines are split across multiple lines</li>
+     *   <li>Empty lines are preserved as separate paragraphs</li>
+     *   <li>Wide characters maintain integrity across reflow</li>
+     * </ul>
+     *
+     * <p>The cursor position is preserved by mapping it to the same logical position
+     * in the reflowed content. If the cursor was in scrollback after resize, it maps to (0,0).
+     *
+     * <p>Both screen and scrollback participate in reflow. If the new screen is smaller,
+     * excess lines move to scrollback.
+     *
+     * @param newWidth new buffer width (must be &gt; 0)
+     * @param newHeight new visible screen height (must be &gt; 0)
+     */
     public void resize(int newWidth, int newHeight) {
         List<Line> allLines = collectLinesForReflow();
         CursorAnchor anchor = calculateCursorAnchor(allLines);

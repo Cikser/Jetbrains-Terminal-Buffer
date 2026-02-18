@@ -7,33 +7,29 @@ import java.util.Arrays;
 class LineContent{
     char[] characters;
     int[] attributes;
-    boolean[] empty;
 }
 
 public class Line {
     private final char[] characters;
     private final int[] attributes;
-    private final boolean[] empty;
 
-    private boolean isWrapped; // TRUE ako je ovo Soft Wrap (nastavak prethodne linije)
+    private boolean isWrapped;
 
-    public boolean isWrapped() {
+    boolean isWrapped() {
         return isWrapped;
     }
 
-    public void setWrapped(boolean wrapped) {
-        isWrapped = wrapped;
+    void setWrapped() {
+        isWrapped = true;
     }
 
     Line(int width, int currentAttributes){
         characters = new char[width];
         attributes = new int[width];
-        empty = new boolean[width];
 
         for(int i = 0; i < width; i++){
             characters[i] = ' ';
-            attributes[i] = currentAttributes;
-            empty[i] = true;
+            attributes[i] = currentAttributes | Style.StyleFlag.EMPTY.value;
         }
 
         isWrapped = false;
@@ -49,8 +45,7 @@ public class Line {
 
     void set(int i, char character, int attributes){
         this.characters[i] = character;
-        this.attributes[i] = attributes;
-        this.empty[i] = false;
+        this.attributes[i] = attributes & ~Style.StyleFlag.EMPTY.value;
     }
 
     @Override
@@ -60,13 +55,13 @@ public class Line {
 
     void fill(char character, int attr){
         Arrays.fill(characters, character);
-        Arrays.fill(attributes, attr);
         if(character != ' '){
-            Arrays.fill(empty, false);
+            attr |= Style.StyleFlag.EMPTY.value;
         }
+        Arrays.fill(attributes, attr);
     }
 
-    LineContent insertAndOverflow(int index, String text, int[] attr, boolean[] empty, int textStartIndex, int textEndIndex){
+    LineContent insertAndOverflow(int index, String text, int[] attr, int textStartIndex, int textEndIndex){
         int capacity = characters.length;
         char[] textChars = text.toCharArray();
         int textLen = textEndIndex - textStartIndex;
@@ -85,61 +80,56 @@ public class Line {
 
         int overflowSize = textOverflowSize + lineOverflowSize;
 
-        LineContent lc = createLineContent(overflowSize, textChars, attr, empty, lineStartIndex, lineOverflowSize, textOverflowStart, textOverflowSize);
-        shiftExistingContentAndInsertText(elementsToCopy, textChars, attr, empty, index, textStartIndex, textLen, textOverflowStart);
+        LineContent lc = createLineContent(overflowSize, textChars, attr, lineStartIndex, lineOverflowSize, textOverflowStart, textOverflowSize);
+        shiftExistingContentAndInsertText(elementsToCopy, textChars, attr, index, textStartIndex, textLen, textOverflowStart);
 
         return lc;
     }
 
-    private LineContent createLineContent(int overflowSize, char[] text, int[] attr, boolean[] empty, int lineStartIndex, int lineOverflowSize, int textOverflowStart, int textOverflowSize){
+    private LineContent createLineContent(int overflowSize, char[] text, int[] attr,  int lineStartIndex, int lineOverflowSize, int textOverflowStart, int textOverflowSize){
         if(overflowSize <= 0) return null;
         LineContent lc = new LineContent();
         lc.characters = new char[overflowSize];
         lc.attributes = new int[overflowSize];
-        lc.empty = new boolean[overflowSize];
 
         System.arraycopy(text, textOverflowStart, lc.characters, 0, textOverflowSize);
         System.arraycopy(attr, textOverflowStart, lc.attributes, 0, textOverflowSize);
-        System.arraycopy(empty, textOverflowStart, lc.empty, 0, textOverflowSize);
         System.arraycopy(characters, lineStartIndex, lc.characters, textOverflowSize, lineOverflowSize);
         System.arraycopy(attributes, lineStartIndex, lc.attributes, textOverflowSize, lineOverflowSize);
-        System.arraycopy(this.empty, lineStartIndex, lc.empty, textOverflowSize, lineOverflowSize);
         return lc;
     }
 
-    void shiftExistingContentAndInsertText(int copiedSize, char[] text, int[] attr, boolean[] empty, int lineStartIndex, int textStartIndex, int textLen, int textOverflowStart){
+    void shiftExistingContentAndInsertText(int copiedSize, char[] text, int[] attr, int lineStartIndex, int textStartIndex, int textLen, int textOverflowStart){
         if(copiedSize > 0){
             System.arraycopy(characters, lineStartIndex, characters, lineStartIndex + textLen, copiedSize);
             System.arraycopy(attributes, lineStartIndex, attributes, lineStartIndex + textLen, copiedSize);
-            System.arraycopy(this.empty, lineStartIndex, this.empty, lineStartIndex + textLen, copiedSize);
         }
         System.arraycopy(text, textStartIndex, characters, lineStartIndex, textOverflowStart - textStartIndex);
         System.arraycopy(attr, textStartIndex, attributes, lineStartIndex, textOverflowStart - textStartIndex);
-        System.arraycopy(empty, textStartIndex, this.empty, lineStartIndex, textOverflowStart - textStartIndex);
     }
 
     boolean empty(){
-        for (boolean isEmpty : empty) {
-            if (!isEmpty) return false;
+        for (int attr : attributes) {
+            if ((attr & Style.StyleFlag.EMPTY.value) == 0) return false;
         }
         return true;
     }
 
     boolean isEmpty(int i){
-        return empty[i];
+        return (attributes[i] & Style.StyleFlag.EMPTY.value) != 0;
     }
 
     public static final char WIDE_PLACEHOLDER = '\u0000';
 
     void setWide(int col, char character, int attributes) {
 
+        attributes &= ~Style.StyleFlag.EMPTY.value;
+
         this.characters[col] = character;
         this.attributes[col] = attributes;
-        this.empty[col] = false;
 
         this.characters[col + 1] = WIDE_PLACEHOLDER;
         this.attributes[col + 1] = attributes;
-        this.empty[col + 1] = false;
     }
 
 }

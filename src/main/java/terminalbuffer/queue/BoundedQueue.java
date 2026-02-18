@@ -1,7 +1,5 @@
 package terminalbuffer.queue;
 
-import java.util.ArrayList;
-
 public class BoundedQueue<E> {
     private Object[] list;
     private int capacity;
@@ -62,26 +60,9 @@ public class BoundedQueue<E> {
         tail = 0;
     }
 
-    public void resize(int newCapacity, boolean copy){
-        Object[] newElements = new Object[newCapacity];
-        if(!copy) {
-            list = newElements;
-            capacity = newCapacity;
-            head = 0;
-            tail = 0;
-            count = 0;
-            return;
-        }
-        int elementsToCopy = Math.min(count, newCapacity);
-
-        for (int i = 0, j = head; i < elementsToCopy; i++, j = (j + 1) % capacity) {
-            newElements[i] = list[j];
-        }
-
-        list = newElements;
+    public void resizeAndClear(int newCapacity){
+        list = new Object[newCapacity];
         capacity = newCapacity;
-        count = elementsToCopy;
-        head = 0;
-        tail = (elementsToCopy == newCapacity) ? 0 : elementsToCopy;
+        clear();
     }
 }

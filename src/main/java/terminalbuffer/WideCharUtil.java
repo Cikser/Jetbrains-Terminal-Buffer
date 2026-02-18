@@ -3,13 +3,12 @@ package terminalbuffer;
 public class WideCharUtil {
 
     public static boolean isWide(char c) {
-        // Fast path za ASCII (>90% tipičnog teksta)
         if (c < 128) return false;
         return isWide((int) c);
     }
 
     public static boolean isWide(int codePoint) {
-        if (codePoint < 128) return false; // ASCII fast path
+        if (codePoint < 128) return false;
 
         Character.UnicodeBlock block = Character.UnicodeBlock.of(codePoint);
         return block == Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS

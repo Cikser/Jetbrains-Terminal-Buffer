@@ -13,7 +13,7 @@ public class TerminalBuffer {
     private Cursor cursor;
 
     void setWrapped(int i){
-        screen.get(i).setWrapped(true);
+        screen.get(i).setWrapped();
     }
 
     public TerminalBuffer(int width, int height, int maxScrollback){
@@ -66,19 +66,20 @@ public class TerminalBuffer {
 
             boolean wide = WideCharUtil.isWide(c);
 
-            if (wide && cursor.col() == width - 1) {
-                screen.get(cursor.row()).set(cursor.col(), ' ', currentAttributes);
+            if(!wide){
+                screen.get(cursor.row()).set(cursor.col(), c, currentAttributes);
+                cursor.advance();
+                continue;
+            }
+
+            if (cursor.col() == width - 1) {
                 cursor.advance();
                 cursor.resolveWrap();
             }
 
-            if (wide) {
-                screen.get(cursor.row()).setWide(cursor.col(), c, currentAttributes);
-                cursor.advanceForWideChar();
-            } else {
-                screen.get(cursor.row()).set(cursor.col(), c, currentAttributes);
-                cursor.advance();
-            }
+            screen.get(cursor.row()).setWide(cursor.col(), c, currentAttributes);
+            cursor.advanceForWideChar();
+
         }
     }
 
@@ -142,7 +143,7 @@ public class TerminalBuffer {
         return sb.toString();
     }
 
-    private void insertAndOverflow(String text, int[] attributes, boolean[] empty, Deque<LineContent> insertQueue){
+    private void insertAndOverflow(String text, int[] attributes, Deque<LineContent> insertQueue){
         cursor.resolveWrap();
         int i = 0;
         int lastControl = -1;
@@ -150,7 +151,7 @@ public class TerminalBuffer {
             int controlChar = findControl(lastControl, text);
 
             Line line = screen.get(cursor.row());
-            LineContent lc = line.insertAndOverflow(cursor.col(), text, attributes, empty, lastControl + 1, controlChar);
+            LineContent lc = line.insertAndOverflow(cursor.col(), text, attributes, lastControl + 1, controlChar);
             int shift = calcCursorShift(lc, lastControl + 1, controlChar);
             cursor.right(shift);
             cursor.resolveWrap();
@@ -187,16 +188,13 @@ public class TerminalBuffer {
 
         StringBuilder expandedText = new StringBuilder();
         List<Integer> expandedAttrs = new ArrayList<>();
-        List<Boolean> expandedEmpty = new ArrayList<>();
 
         for (char c : text.toCharArray()) {
             expandedText.append(c);
             expandedAttrs.add(currentAttributes);
-            expandedEmpty.add(false);
             if (WideCharUtil.isWide(c)) {
                 expandedText.append(Line.WIDE_PLACEHOLDER);
                 expandedAttrs.add(currentAttributes);
-                expandedEmpty.add(false);
             }
         }
 
@@ -205,13 +203,11 @@ public class TerminalBuffer {
         for (int i = 0; i < expandedAttrs.size(); i++) {
             attributes[i] = expandedAttrs.get(i);
         }
-        boolean[] empty = new boolean[expandedEmpty.size()];
-        for (int i = 0; i < expandedEmpty.size(); i++) empty[i] = expandedEmpty.get(i);
 
-        insertAndOverflow(expanded, attributes, empty, insertQueue);
+        insertAndOverflow(expanded, attributes, insertQueue);
         while (!insertQueue.isEmpty()) {
             LineContent lc = insertQueue.pop();
-            insertAndOverflow(new String(lc.characters), lc.attributes, lc.empty, insertQueue);
+            insertAndOverflow(new String(lc.characters), lc.attributes, insertQueue);
         }
 
         cursor = newCursor;
@@ -275,7 +271,6 @@ public class TerminalBuffer {
         List<Line> allLines = collectLinesForReflow();
         CursorAnchor anchor = calculateCursorAnchor(allLines);
 
-        // Optimizacija: Radimo reflow bez međulista StyledChar objekata
         ReflowResult result = performFastReflow(allLines, newWidth, anchor);
 
         this.width = newWidth;
@@ -285,41 +280,33 @@ public class TerminalBuffer {
         restoreCursorPosition(result.newCursorRow, result.newCursorCol, result.newLines.size());
     }
 
-    // Rekordi ostaju za čitljivost (kreiraju se samo jednom po resize-u, to je zanemarljivo)
+
     private record CursorAnchor(int blockIndex, int offset) {}
     private record ReflowResult(List<Line> newLines, int newCursorRow, int newCursorCol) {}
 
-    /**
-     * Glavna optimizacija: Prolazimo kroz linije i identifikujemo "paragrafe" (logičke blokove).
-     * Umesto kopiranja u liste, direktno čitamo iz starih Line objekata u nove.
-     */
+
     private ReflowResult performFastReflow(List<Line> allLines, int newWidth, CursorAnchor anchor) {
-        List<Line> newLines = new ArrayList<>(allLines.size()); // Pre-allocate
+        List<Line> newLines = new ArrayList<>(allLines.size());
         int resRow = -1, resCol = -1;
         int currentBlockIdx = 0;
 
         int i = 0;
         while (i < allLines.size()) {
-            // 1. Identifikuj opseg paragrafa (od i do end)
             int start = i;
             int end = i;
             while (end + 1 < allLines.size() && allLines.get(end + 1).isWrapped()) {
                 end++;
             }
 
-            // 2. Izračunaj efektivnu dužinu paragrafa (bez trailing spaces)
             int effectiveLen = calculateEffectiveLength(allLines, start, end);
 
-            // 3. Odredi koliko nam novih linija treba za ovaj pasus
-            // Uključujemo i kursor ako je on unutar ovog bloka
             int logicSize = (currentBlockIdx == anchor.blockIndex)
                     ? Math.max(effectiveLen, anchor.offset + 1)
                     : effectiveLen;
 
-            // 4. "Iseci" pasus u nove linije direktnim kopiranjem
             for (int offset = 0; offset < logicSize || (logicSize == 0 && offset == 0); offset += newWidth) {
                 Line newLine = new Line(newWidth, currentAttributes);
-                if (offset > 0) newLine.setWrapped(true);
+                if (offset > 0) newLine.setWrapped();
 
                 if (currentBlockIdx == anchor.blockIndex && anchor.offset >= offset && anchor.offset < offset + newWidth) {
                     resRow = newLines.size();
@@ -331,20 +318,16 @@ public class TerminalBuffer {
             }
 
             currentBlockIdx++;
-            i = end + 1; // Pređi na sledeći pasus
+            i = end + 1;
         }
         return new ReflowResult(newLines, resRow, resCol);
     }
 
-    /**
-     * Pronalazi poslednji ne-prazan karakter u celom logičkom bloku.
-     * O(N) po pasusu, ali bez alokacije memorije.
-     */
     private int calculateEffectiveLength(List<Line> lines, int start, int end) {
         for (int l = end; l >= start; l--) {
             Line line = lines.get(l);
             for (int c = this.width - 1; c >= 0; c--) {
-                if (line.getChar(c) != ' ' || line.getAttributes(c) != currentAttributes) {
+                if (!line.isEmpty(c) && (line.getChar(c) != ' ' || line.getAttributes(c) != currentAttributes)) {
                     return (l - start) * this.width + (c + 1);
                 }
             }
@@ -352,9 +335,7 @@ public class TerminalBuffer {
         return 0;
     }
 
-    /**
-     * Direktno kopiranje iz više starih linija u jednu novu liniju.
-     */
+
     private void copyFromOriginal(List<Line> allLines, int start, int end, Line target, int startOffset, int targetWidth) {
         for (int j = 0; j < targetWidth; j++) {
             int globalOffset = startOffset + j;
@@ -365,7 +346,7 @@ public class TerminalBuffer {
                 Line source = allLines.get(start + lineInBlock);
                 target.set(j, source.getChar(colInLine), source.getAttributes(colInLine));
             } else {
-                break; // Kraj pasusa
+                break;
             }
         }
     }
@@ -420,8 +401,7 @@ public class TerminalBuffer {
 
     private void rebuildBuffers(List<Line> newLines, int newHeight) {
         scrollback.clear();
-        screen.clear();
-        screen.resize(newHeight, false);
+        screen.resizeAndClear(newHeight);
 
         int totalNewLines = newLines.size();
 

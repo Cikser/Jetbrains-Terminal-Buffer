@@ -8,7 +8,8 @@ public class Style {
         NONE(0),
         BOLD(1),
         ITALIC(1 << 1),
-        UNDERLINE(1 << 2);
+        UNDERLINE(1 << 2),
+        EMPTY(1 << 24);
 
         public final int value;
 

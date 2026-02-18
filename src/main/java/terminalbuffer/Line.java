@@ -61,9 +61,8 @@ public class Line {
         Arrays.fill(attributes, attr);
     }
 
-    LineContent insertAndOverflow(int index, String text, int[] attr, int textStartIndex, int textEndIndex){
+    LineContent insertAndOverflow(int index, char[] textChars, int[] attr, int textStartIndex, int textEndIndex){
         int capacity = characters.length;
-        char[] textChars = text.toCharArray();
         int textLen = textEndIndex - textStartIndex;
         int textOverflowSize = (index + textLen) > capacity ? textLen - (capacity - index) : 0;
         int textOverflowStart = textStartIndex + textLen - textOverflowSize;
@@ -106,6 +105,12 @@ public class Line {
         }
         System.arraycopy(text, textStartIndex, characters, lineStartIndex, textOverflowStart - textStartIndex);
         System.arraycopy(attr, textStartIndex, attributes, lineStartIndex, textOverflowStart - textStartIndex);
+    }
+
+    LineContent insertWideAndOverflow(int index, char wideChar, int attr){
+        char[] wideChunk = new char[]{ wideChar, WIDE_PLACEHOLDER };
+        int[] wideAttrs = new int[]{ attr, attr };
+        return insertAndOverflow(index, wideChunk, wideAttrs, 0, 2);
     }
 
     boolean empty(){

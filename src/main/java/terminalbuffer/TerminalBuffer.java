@@ -146,23 +146,56 @@ public class TerminalBuffer {
     private void insertAndOverflow(String text, int[] attributes, Deque<LineContent> insertQueue){
         cursor.resolveWrap();
         int i = 0;
-        int lastControl = -1;
-        while (i < text.length()){
-            int controlChar = findControl(lastControl, text);
-
-            Line line = screen.get(cursor.row());
-            LineContent lc = line.insertAndOverflow(cursor.col(), text, attributes, lastControl + 1, controlChar);
-            int shift = calcCursorShift(lc, lastControl + 1, controlChar);
-            cursor.right(shift);
-            cursor.resolveWrap();
-            cursor.advance();
-            if(lc != null) insertQueue.push(lc);
-            if(controlChar < text.length()){
-                cursor.handleChar(text.charAt(controlChar));
-                lastControl = controlChar;
+        char[] chars = text.toCharArray();
+        while (i < chars.length){
+            if(chars[i] == Line.WIDE_PLACEHOLDER) {
+                i++;
+                continue;
             }
-            i = controlChar + 1;
+            int next = findControlOrWide(i, chars);
+
+            processTextChunk(chars, attributes, i, next, insertQueue);
+
+            if(next < chars.length){
+                char c = text.charAt(next);
+                if(c == '\r' || c == '\n')
+                    cursor.handleChar(c);
+                else{
+                    handleWideCharInsert(chars, attributes, next, insertQueue);
+                }
+            }
+            i = next + 1;
         }
+    }
+
+    private void handleWideCharInsert(char[] text, int[] attributes, int start, Deque<LineContent> insertQueue){
+        cursor.resolveWrap();
+        if (cursor.col() == width - 1) {
+            cursor.advance();
+            cursor.resolveWrap();
+        }
+        Line line = screen.get(cursor.row());
+        char c = text[start];
+        int attr = attributes[start];
+        LineContent lc = line.insertWideAndOverflow(cursor.col(), c, attr);
+        cursor.advanceForWideChar();
+        moveCursorAfterInsert(lc, start, start + 2);
+        if (lc != null) insertQueue.push(lc);
+    }
+
+    private void processTextChunk(char[] text, int[] attributes, int start, int end, Deque<LineContent> insertQueue){
+        if(start == end) return;
+        Line line = screen.get(cursor.row());
+        LineContent lc = line.insertAndOverflow(cursor.col(), text, attributes, start, end);
+        moveCursorAfterInsert(lc, start, end);
+        if(lc != null) insertQueue.push(lc);
+    }
+
+    private void moveCursorAfterInsert(LineContent lc, int textStartIndex, int textEndIndex){
+        int shift = calcCursorShift(lc, textStartIndex, textEndIndex);
+        cursor.right(shift);
+        cursor.resolveWrap();
+        cursor.advance();
     }
 
     private int calcCursorShift(LineContent lc, int textStartIndex, int textEndIndex){
@@ -172,12 +205,13 @@ public class TerminalBuffer {
         return Math.min(width, substringLen - 1);
     }
 
-    private int findControl(int lastControl, String text){
-        for(int i = lastControl + 1; i < text.length(); i++){
-            if(text.charAt(i) == '\r' || text.charAt(i) == '\n')
+    private int findControlOrWide(int start, char[] text){
+        for(int i = start; i < text.length; i++){
+            char c = text[i];
+            if(c == '\r' || c == '\n' || WideCharUtil.isWide(c))
                 return i;
         }
-        return text.length();
+        return text.length;
     }
 
     public void insert(String text) {
